@@ -13,7 +13,7 @@ AllowShortIfStatementsOnASingleLine: "false"
 AllowShortLoopsOnASingleLine: "false"
 BreakBeforeBraces: Allman
 BreakConstructorInitializers: BeforeComma
-ColumnLimit: "256"
+ColumnLimit: "512"
 CompactNamespaces: "false"
 ConstructorInitializerAllOnOneLineOrOnePerLine: "false"
 ConstructorInitializerIndentWidth: "4"
