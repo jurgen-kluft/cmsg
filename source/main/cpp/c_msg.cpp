@@ -46,6 +46,9 @@ namespace ncore
 
     struct vector3_t
     {
+        vector3_t() : x(0), y(0), z(0) {}
+        vector3_t(float x, float y, float z) : x(x), y(y), z(z) {}
+
         float x,y,z;
 
         static vector3_t zero;
@@ -55,7 +58,6 @@ namespace ncore
     static void use_case()
     {
         alloc_t* allocator = context_t::system_alloc();
-
 
         ecs_system ecs(allocator);
 
@@ -80,15 +82,15 @@ namespace ncore
 
         id_t explosion_msg_id = ecs.register_id("msg/explosion");
 
-        property_t pos_prop    = msg.registery_property<vector3_t>("position", vector3_t::zero);
-        property_t radius_prop = msg.registery_property<float>("radius", 10.0f);
-        property_t damage_prop = msg.registery_property<float>("damage", 1.0f);
+        property_t pos_prop    = msg.register_property<vector3_t>("position", vector3_t::zero);
+        property_t radius_prop = msg.register_property<float>("radius", 10.0f);
+        property_t damage_prop = msg.register_property<float>("damage", 1.0f);
 
         // what about composing a message using named (registered) properties?
         vector3_t explosion_pos(100, 2, 5);
 
         // position, radius, damage
-        explosion_msg = msg.begin(explosion_msg_id, 3);
+        msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
         {
             // properties by id
             msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos);

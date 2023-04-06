@@ -17,6 +17,11 @@ namespace ncore
     typedef void* property_t;
     typedef void* value_t;
 
+    template <typename T> struct type_t
+    {
+        static T default_value;
+    };
+
 
     // ------------------------------------------------------------------------------------------------
     // message
@@ -43,6 +48,7 @@ namespace ncore
 
         s32                           num_properties(msg_t msg);
         template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
+        template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
         template <typename T> bool    read_property(msg_t msg, property_t property, T const*& value);
         value_t                       get_property(msg_t msg, property_t property);
         bool                          is_property_typeof(msg_t msg, property_t property, const T* default_value = &type_t<T>::default_value);
