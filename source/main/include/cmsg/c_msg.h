@@ -19,10 +19,57 @@ namespace ncore
     typedef void* property_t;
     typedef void* value_t;
 
+    struct vector3_t
+    {
+        vector3_t()
+            : x(0)
+            , y(0)
+            , z(0)
+        {
+        }
+        vector3_t(f32 x, f32 y, f32 z)
+            : x(x)
+            , y(y)
+            , z(z)
+        {
+        }
+        f32 x;
+        f32 y;
+        f32 z;
+    };
+
+    struct typeinfo_t
+    {
+        typeinfo_t(const char* type_name, const void* default_value, u32 sizeof_type)
+            : m_type_name(type_name)
+            , m_default_value(default_value)
+            , m_sizeof(sizeof_type)
+        {
+        }
+        const char* m_type_name;
+        const void* m_default_value;
+        u32         m_sizeof;
+    };
+
     template <typename T> struct type_t
     {
-        static T default_value;
+        static const T    default_value;
+        static typeinfo_t typeinfo;
     };
+
+    // ------------------------------------------------------------------------------------------------
+    // types
+    static const type_t<u8>        type_u8;
+    static const type_t<u16>       type_u16;
+    static const type_t<u32>       type_u32;
+    static const type_t<u64>       type_u64;
+    static const type_t<s8>        type_s8;
+    static const type_t<s16>       type_s16;
+    static const type_t<s32>       type_s32;
+    static const type_t<s64>       type_s64;
+    static const type_t<f32>       type_f32;
+    static const type_t<bool>      type_bool;
+    static const type_t<vector3_t> type_vector3;
 
     // ------------------------------------------------------------------------------------------------
     // message
@@ -54,7 +101,7 @@ namespace ncore
         template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
         template <typename T> bool    read_property(msg_t msg, property_t property, T const*& value);
         value_t                       get_property(msg_t msg, property_t property);
-        bool                          is_property_typeof(msg_t msg, property_t property, const T* default_value = &type_t<T>::default_value);
+        template <typename T> bool    is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
 
         // message - post
 
@@ -71,19 +118,6 @@ namespace ncore
     class ecs_t
     {
     public:
-        // ------------------------------------------------------------------------------------------------
-        // types
-        static const type_t<u8>   type_u8;
-        static const type_t<u16>  type_u16;
-        static const type_t<u32>  type_u32;
-        static const type_t<u64>  type_u64;
-        static const type_t<s8>   type_s8;
-        static const type_t<s16>  type_s16;
-        static const type_t<s32>  type_s32;
-        static const type_t<s64>  type_s64;
-        static const type_t<f32>  type_f32;
-        static const type_t<bool> type_bool;
-
         // ------------------------------------------------------------------------------------------------
         class ihandler
         {
@@ -124,9 +158,9 @@ namespace ncore
 
         // system - component
 
-        template <typename T> component_t register_component(system_t system, id_t id, const T* default_value = &type_t<T>::default_value);
-        template <typename T> component_t register_component(system_t system, const char* name, const T* default_value = &type_t<T>::default_value);
-        template <typename T> bool        typeof_component(component_t component, const T* default_value = &type_t<T>::default_value);
+        template <typename T> component_t register_component(system_t system, id_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+        template <typename T> component_t register_component(system_t system, const char* name, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+        template <typename T> bool        typeof_component(component_t component, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
         id_t                              idof_component(component_t component);
         const char*                       nameof_component(component_t component);
 

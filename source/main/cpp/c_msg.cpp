@@ -12,7 +12,8 @@ namespace ncore
     // or a specific system
     //
     // The message system leans heavily on the concept of 'frame' allocators
-    // to avoid memory fragmentation and to allow for fast allocation and no deallocation.
+    // to avoid memory fragmentation and to allow for fast allocation and
+    // batch based deallocation.
     //
 
     class SystemShips : public ecs_t::ihandler
@@ -124,28 +125,42 @@ namespace ncore
     }
 
     // the standard types that can be used as ecs components and message properties
-    const type_t<u8>   ecs_t::type_u8;
-    const type_t<u16>  ecs_t::type_u16;
-    const type_t<u32>  ecs_t::type_u32;
-    const type_t<u64>  ecs_t::type_u64;
-    const type_t<s8>   ecs_t::type_s8;
-    const type_t<s16>  ecs_t::type_s16;
-    const type_t<s32>  ecs_t::type_s32;
-    const type_t<s64>  ecs_t::type_s64;
-    const type_t<f32>  ecs_t::type_f32;
-    const type_t<bool> ecs_t::type_bool;
+    const type_t<u8>        type_u8;
+    const type_t<u16>       type_u16;
+    const type_t<u32>       type_u32;
+    const type_t<u64>       type_u64;
+    const type_t<s8>        type_s8;
+    const type_t<s16>       type_s16;
+    const type_t<s32>       type_s32;
+    const type_t<s64>       type_s64;
+    const type_t<f32>       type_f32;
+    const type_t<bool>      type_bool;
+    const type_t<vector3_t> type_vector3;
 
     // the defaults of the above types are:
-    u8   type_t<u8>::default_value   = 0;
-    u16  type_t<u16>::default_value  = 0;
-    u32  type_t<u32>::default_value  = 0;
-    u64  type_t<u64>::default_value  = 0;
-    s8   type_t<s8>::default_value   = 0;
-    s16  type_t<s16>::default_value  = 0;
-    s32  type_t<s32>::default_value  = 0;
-    s64  type_t<s64>::default_value  = 0;
-    f32  type_t<f32>::default_value  = 0.0f;
-    bool type_t<bool>::default_value = false;
+    const u8        type_t<u8>::default_value        = 0;
+    const u16       type_t<u16>::default_value       = 0;
+    const u32       type_t<u32>::default_value       = 0;
+    const u64       type_t<u64>::default_value       = 0;
+    const s8        type_t<s8>::default_value        = 0;
+    const s16       type_t<s16>::default_value       = 0;
+    const s32       type_t<s32>::default_value       = 0;
+    const s64       type_t<s64>::default_value       = 0;
+    const f32       type_t<f32>::default_value       = 0.0f;
+    const bool      type_t<bool>::default_value      = false;
+    const vector3_t type_t<vector3_t>::default_value = vector3_t::zero;
+
+    typeinfo_t type_t<u8>::typeinfo("u8", &type_t<u8>::default_value, sizeof(u8));
+    typeinfo_t type_t<u16>::typeinfo("u16", &type_t<u16>::default_value, sizeof(u16));
+    typeinfo_t type_t<u32>::typeinfo("u32", &type_t<u32>::default_value, sizeof(u32));
+    typeinfo_t type_t<u64>::typeinfo("u64", &type_t<u64>::default_value, sizeof(u64));
+    typeinfo_t type_t<s8>::typeinfo("s8", &type_t<s8>::default_value, sizeof(s8));
+    typeinfo_t type_t<s16>::typeinfo("s16", &type_t<s16>::default_value, sizeof(s16));
+    typeinfo_t type_t<s32>::typeinfo("s32", &type_t<s32>::default_value, sizeof(s32));
+    typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
+    typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
+    typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
+    typeinfo_t type_t<vector3_t>::typeinfo("vector3", &type_t<vector3_t>::default_value, sizeof(vector3_t));
 
     ecs_t::ecs_t(alloc_t* allocator, u32 max_ids, u32 max_systems, u32 max_components)
         : msg(allocator)
@@ -170,8 +185,7 @@ namespace ncore
 
     struct component_info_t
     {
-        u32   m_sizeof;
-        void* m_type; // pointer, &type_t<T>::default_value
+        typeinfo_t* m_typeinfo;
     };
 
     struct system_info_t
@@ -187,16 +201,16 @@ namespace ncore
         u32 m_capacity;
     };
 
-    struct ecs_system_data_t
+    struct system_data_t
     {
         ecs_data_t* m_ecs; // pointer to the ecs data
 
         array_t<u16>   m_component_remap; // set to ecs 'max' components
         array_t<void*> m_component_data;  // set to ecs-system 'max' components
 
-        hbb_data_t  m_entity_used;             // set to ecs-system 'max' entities
-        hbb_hdr_t   m_entity_cp_used_hbb_hdr;  // hbb hdr for used components
-        array_t<u8> m_entity_cp_used_hbb_data; // entity, hbb data per entity to indicate which component is used
+        hbb_data_t   m_entity_used;             // set to ecs-system 'max' entities
+        hbb_hdr_t    m_entity_cp_used_hbb_hdr;  // hbb hdr for used components
+        array_t<u32> m_entity_cp_used_hbb_data; // entity, hbb data per entity to indicate which component is used
     };
 
     struct ecs_data_t
@@ -216,11 +230,11 @@ namespace ncore
 
         // when registering a system by name (or getting by name), the name is hashed and the hash is used to find the system
         // but then when we insert (sorted) it into the system array, we need to know the index of the component
-        hbb_hdr_t                  m_system_free_hbb_hdr;
-        hbb_data_t                 m_system_free_hbb_data;
-        array_t<named_item_t>      m_system_names; // (sorted by hash) capacity = max-components
-        array_t<system_info_t>     m_system_array; // capacity = max-components
-        array_t<ecs_system_data_t> m_system_array;
+        hbb_hdr_t              m_system_free_hbb_hdr;
+        hbb_data_t             m_system_free_hbb_data;
+        array_t<named_item_t>  m_system_names; // (sorted by hash) capacity = max-components
+        array_t<system_info_t> m_system_array; // capacity = max-components
+        array_t<system_data_t> m_system_array;
     };
 
     id_t        ecs_t::register_id(const char* name) {}
