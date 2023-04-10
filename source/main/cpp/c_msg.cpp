@@ -1,7 +1,9 @@
 #include "cbase/c_allocator.h"
 #include "cbase/c_context.h"
+#include "cbase/c_debug.h"
 #include "cbase/c_memory.h"
 #include "cbase/c_hbb.h"
+#include "cbase/c_runes.h"
 
 #include "cmsg/c_msg.h"
 
@@ -162,6 +164,109 @@ namespace ncore
     typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
     typeinfo_t type_t<vector3_t>::typeinfo("vector3", &type_t<vector3_t>::default_value, sizeof(vector3_t));
 
+    template <typename T> struct array_t
+    {
+        void initialize(alloc_t* allocator, u32 capacity)
+        {
+            m_size      = 0;
+            m_capacity  = capacity;
+            m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
+        }
+
+        void insert(u32 index, const T& value)
+        {
+            ASSERT(index <= m_size);
+            ASSERT(m_size < m_capacity);
+
+            if (index < m_size)
+                memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
+
+            m_data[index] = value;
+            m_size++;
+        }
+
+        T*  m_data;
+        u32 m_size;
+        u32 m_capacity;
+    };
+
+    static s32 binary_search(const u32* array, u32 size, u32 value)
+    {
+        s32 low  = 0;
+        s32 high = size - 1;
+
+        while (low <= high)
+        {
+            s32 mid       = (low + high) / 2;
+            u32 mid_value = array[mid];
+
+            if (mid_value < value)
+                low = mid + 1;
+            else if (mid_value > value)
+                high = mid - 1;
+            else
+                return mid;
+        }
+
+        return low; // return the index where the value should be inserted
+    }
+
+    // name registration (ASCII only)
+    struct names_db_t
+    {
+        void init(alloc_t* allocator, u32 max_names = 32768)
+        {
+            m_name_offset_array.initialize(allocator, max_names);
+            m_name_hash_array.initialize(allocator, max_names);
+
+            // initialize the name string array assuming that the average name length is 32
+            m_name_str_array.initialize(allocator, max_names * 32);
+        }
+
+        static u64 generate_hash(const char* name)
+        {
+            u64 const seed = 0;
+            u64 const prime = 0x9E3779B185EBCA87ULL;
+            u64 hash = seed + prime;
+            while (*name)
+            {
+                hash ^= *name++;
+                hash *= prime;
+            }
+            return hash;
+        }
+
+        u32 register_name(const char* name)
+        {
+            u32 const hash = generate_hash(name);
+
+            // find the name in the hash array which is sorted by hash
+            s32 index = binary_search(m_name_hash_array.m_data, m_name_hash_array.m_size, hash);
+
+            // if the name is already registered return the id
+            if (index < m_name_hash_array.m_size && m_name_hash_array.m_data[index] == hash)
+            {
+                ASSERT(ascii::compare(name, m_name_str_array.m_data + m_name_offset_array.m_data[index]) == 0);
+                return m_name_offset_array.m_data[index];
+            }
+
+            // we assume that we do not have hash collisions, so a hash is unique
+
+            // if the name is not registered insert it in the hash array
+            // make space for the new name in the hash and offset array
+            m_name_hash_array.insert(index, hash);
+            m_name_offset_array.insert(index, m_name_str_array.m_size);
+
+            // append the name in the string array
+            while (*name && m_name_str_array.m_size < m_name_str_array.m_capacity)
+                m_name_str_array.m_data[m_name_str_array.m_size++] = *name++;
+        }
+
+        array_t<u32>  m_name_hash_array;   // capacity = max-ids
+        array_t<u32>  m_name_offset_array; // capacity = max-ids
+        array_t<char> m_name_str_array;    // the names are stored in a single array of chars
+    };
+
     ecs_t::ecs_t(alloc_t* allocator, u32 max_ids, u32 max_systems, u32 max_components)
         : msg(allocator)
     {
@@ -171,40 +276,24 @@ namespace ncore
     // the name is stored in a separate array of strings and not available in the release/final build
     // hash collisions are not allowed
 
-    struct id_data_t
+    struct name_data_t
     {
-        u32 m_hash;
-        u32 m_offset;
+        u32 m_hash;   // hash of the name (name hash array)
+        u32 m_offset; // offset of the name (name str array)
+        u32 m_index;  // index into the object array (component, system, ...)
     };
 
-    struct named_item_t
-    {
-        u32 m_index;  // index into the item array
-        u32 m_offset; // offset into the name array
-    };
-
-    struct component_info_t
+    struct component_data_t
     {
         typeinfo_t* m_typeinfo;
     };
 
-    struct system_info_t
-    {
-        u32              m_max_components;
-        ecs_t::ihandler* m_handler;
-    };
-
-    template <typename T> struct array_t
-    {
-        T*  m_data;
-        u32 m_size;
-        u32 m_capacity;
-    };
-
     struct system_data_t
     {
-        ecs_data_t* m_ecs; // pointer to the ecs data
+        ecs_t::ihandler* m_handler;
+        ecs_data_t*      m_ecs; // pointer to the ecs data
 
+        u32            m_max_components;
         array_t<u16>   m_component_remap; // set to ecs 'max' components
         array_t<void*> m_component_data;  // set to ecs-system 'max' components
 
@@ -217,24 +306,21 @@ namespace ncore
     {
         alloc_t* m_allocator;
 
-        // id_t - name
-        array_t<id_data_t> m_ids;   // capacity = max-ids
-        array_t<char>      m_names; // the names are stored in a single array of chars
+        names_db_t m_names;
 
         // when registering a component by name, the name is hashed and the hash is used to find the component
         // but then when we insert (sorted) it into the component array, we need to know the index of the component
         hbb_hdr_t                 m_component_free_hbb_hdr;
         hbb_data_t                m_component_free_hbb_data;
-        array_t<named_item_t>     m_component_names; // (sorted by hash) capacity = max-components
-        array_t<component_info_t> m_component_array; // capacity = max-components
+        array_t<name_data_t>      m_component_names; // (sorted by hash) capacity = max-components
+        array_t<component_data_t> m_component_array; // capacity = max-components
 
         // when registering a system by name (or getting by name), the name is hashed and the hash is used to find the system
         // but then when we insert (sorted) it into the system array, we need to know the index of the component
         hbb_hdr_t              m_system_free_hbb_hdr;
         hbb_data_t             m_system_free_hbb_data;
-        array_t<named_item_t>  m_system_names; // (sorted by hash) capacity = max-components
-        array_t<system_info_t> m_system_array; // capacity = max-components
-        array_t<system_data_t> m_system_array;
+        array_t<name_data_t>   m_system_names; // (sorted by hash) capacity = max-components
+        array_t<system_data_t> m_system_array; // capacity = max-components
     };
 
     id_t        ecs_t::register_id(const char* name) {}
