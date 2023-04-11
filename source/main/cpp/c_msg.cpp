@@ -211,7 +211,12 @@ namespace ncore
         return low; // return the index where the value should be inserted
     }
 
-    // name registration (ASCII only)
+    //          name registration (ASCII only)
+    // NOTE:
+    // do we really have to store the strings ourselves or could we just
+    // use the pointers ?
+    // if the user only uses direct strings, e.g. ecs.register_id("speed");
+    // then we could just use the string pointers (and no need for hashing)
     struct names_db_t
     {
         void init(alloc_t* allocator, u32 max_names = 32768)
