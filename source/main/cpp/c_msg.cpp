@@ -53,26 +53,6 @@ namespace ncore
     };
     SystemRender* gSystemRender = nullptr;
 
-    struct vector3_t
-    {
-        vector3_t()
-            : x(0)
-            , y(0)
-            , z(0)
-        {
-        }
-        vector3_t(float x, float y, float z)
-            : x(x)
-            , y(y)
-            , z(z)
-        {
-        }
-
-        float x, y, z;
-
-        static vector3_t zero;
-        static vector3_t up;
-    };
 
     static void use_case()
     {
@@ -126,18 +106,6 @@ namespace ncore
         msg.post(sfx_system, explosion_msg);
     }
 
-    // the standard types that can be used as ecs components and message properties
-    const type_t<u8>        type_u8;
-    const type_t<u16>       type_u16;
-    const type_t<u32>       type_u32;
-    const type_t<u64>       type_u64;
-    const type_t<s8>        type_s8;
-    const type_t<s16>       type_s16;
-    const type_t<s32>       type_s32;
-    const type_t<s64>       type_s64;
-    const type_t<f32>       type_f32;
-    const type_t<bool>      type_bool;
-    const type_t<vector3_t> type_vector3;
 
     // the defaults of the above types are:
     const u8        type_t<u8>::default_value        = 0;
@@ -173,21 +141,21 @@ namespace ncore
             m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
         }
 
-        void insert(u32 index, const T& value)
+        void insert(s32 index, const T& value)
         {
             ASSERT(index <= m_size);
             ASSERT(m_size < m_capacity);
 
             if (index < m_size)
-                memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
+                nmem::memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
 
             m_data[index] = value;
             m_size++;
         }
 
         T*  m_data;
-        u32 m_size;
-        u32 m_capacity;
+        s32 m_size;
+        s32 m_capacity;
     };
 
     static s32 binary_search(const u32* array, u32 size, u32 value)
@@ -228,7 +196,7 @@ namespace ncore
             m_name_str_array.initialize(allocator, max_names * 32);
         }
 
-        static u64 generate_hash(const char* name)
+        static u32 generate_hash(const char* name)
         {
             u64 const seed = 0;
             u64 const prime = 0x9E3779B185EBCA87ULL;
@@ -238,7 +206,7 @@ namespace ncore
                 hash ^= *name++;
                 hash *= prime;
             }
-            return hash;
+            return (u32)hash;
         }
 
         u32 register_name(const char* name)
@@ -246,7 +214,7 @@ namespace ncore
             u32 const hash = generate_hash(name);
 
             // find the name in the hash array which is sorted by hash
-            s32 index = binary_search(m_name_hash_array.m_data, m_name_hash_array.m_size, hash);
+            const s32 index = binary_search(m_name_hash_array.m_data, m_name_hash_array.m_size, hash);
 
             // if the name is already registered return the id
             if (index < m_name_hash_array.m_size && m_name_hash_array.m_data[index] == hash)
@@ -274,6 +242,7 @@ namespace ncore
 
     ecs_t::ecs_t(alloc_t* allocator, u32 max_ids, u32 max_systems, u32 max_components)
         : msg(allocator)
+        , data(nullptr)
     {
     }
 
@@ -328,7 +297,7 @@ namespace ncore
         array_t<system_data_t> m_system_array; // capacity = max-components
     };
 
-    id_t        ecs_t::register_id(const char* name) {}
-    const char* ecs_t::nameof_id(id_t system) {}
+    id_t        ecs_t::register_id(const char* name) { return id_t{0}; }
+    const char* ecs_t::nameof_id(id_t system) { return "";}
 
 } // namespace ncore

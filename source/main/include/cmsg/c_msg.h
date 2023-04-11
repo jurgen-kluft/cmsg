@@ -11,13 +11,34 @@ namespace ncore
 {
     class alloc_t;
 
-    typedef u32   id_t;        // 32
-    typedef u32   system_t;    // 9 bits for system, 3 bits for type,
-    typedef u32   entity_t;    // 9 bits for system, 3 bits for type, 16 bits for entity, 4 bits for salt
-    typedef u32   component_t; // 9 bits for system, 3 bits for type, 16 bits for component, 4 bits for salt
-    typedef u32   msg_t;
-    typedef void* property_t;
-    typedef void* value_t;
+    struct id_t// 32
+    {
+        u32 id; 
+    }; 
+    struct system_t// 9 bits for system, 3 bits for type,
+    {
+        u32 system; 
+    }; 
+    struct entity_t // 9 bits for system, 3 bits for type, 16 bits for entity, 4 bits for salt
+    {
+        u32 entity;
+    };
+    struct component_t // 9 bits for system, 3 bits for type, 16 bits for component, 4 bits for salt
+    {
+        u32 component;
+    }; 
+    struct msg_t
+    {
+        u32 msg;
+    };
+    struct property_t
+    {
+        void* p;
+    };
+    struct value_t
+    {
+        void* p;
+    };
 
     struct vector3_t
     {
@@ -27,15 +48,17 @@ namespace ncore
             , z(0)
         {
         }
-        vector3_t(f32 x, f32 y, f32 z)
+        vector3_t(float x, float y, float z)
             : x(x)
             , y(y)
             , z(z)
         {
         }
-        f32 x;
-        f32 y;
-        f32 z;
+
+        float x, y, z;
+
+        static vector3_t zero;
+        static vector3_t up;
     };
 
     struct typeinfo_t
