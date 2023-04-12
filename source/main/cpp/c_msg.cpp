@@ -53,7 +53,6 @@ namespace ncore
     };
     SystemRender* gSystemRender = nullptr;
 
-
     static void use_case()
     {
         alloc_t* allocator = context_t::system_alloc();
@@ -106,7 +105,6 @@ namespace ncore
         msg.post(sfx_system, explosion_msg);
     }
 
-
     // the defaults of the above types are:
     const u8        type_t<u8>::default_value        = 0;
     const u16       type_t<u16>::default_value       = 0;
@@ -136,9 +134,16 @@ namespace ncore
     {
         void initialize(alloc_t* allocator, u32 capacity)
         {
-            m_size      = 0;
-            m_capacity  = capacity;
+            m_size     = 0;
+            m_capacity = capacity;
             m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
+        }
+
+        void add(const T& value)
+        {
+            ASSERT(index <= m_size);
+            ASSERT(m_size < m_capacity);
+            m_data[m_size++] = value;
         }
 
         void insert(s32 index, const T& value)
@@ -158,27 +163,6 @@ namespace ncore
         s32 m_capacity;
     };
 
-    static s32 binary_search(const u32* array, u32 size, u32 value)
-    {
-        s32 low  = 0;
-        s32 high = size - 1;
-
-        while (low <= high)
-        {
-            s32 mid       = (low + high) / 2;
-            u32 mid_value = array[mid];
-
-            if (mid_value < value)
-                low = mid + 1;
-            else if (mid_value > value)
-                high = mid - 1;
-            else
-                return mid;
-        }
-
-        return low; // return the index where the value should be inserted
-    }
-
     //          name registration (ASCII only)
     // NOTE:
     // do we really have to store the strings ourselves or could we just
@@ -187,57 +171,44 @@ namespace ncore
     // then we could just use the string pointers (and no need for hashing)
     struct names_db_t
     {
-        void init(alloc_t* allocator, u32 max_names = 32768)
-        {
-            m_name_offset_array.initialize(allocator, max_names);
-            m_name_hash_array.initialize(allocator, max_names);
-
-            // initialize the name string array assuming that the average name length is 32
-            m_name_str_array.initialize(allocator, max_names * 32);
-        }
-
-        static u32 generate_hash(const char* name)
-        {
-            u64 const seed = 0;
-            u64 const prime = 0x9E3779B185EBCA87ULL;
-            u64 hash = seed + prime;
-            while (*name)
-            {
-                hash ^= *name++;
-                hash *= prime;
-            }
-            return (u32)hash;
-        }
+        void init(alloc_t* allocator, u32 max_names = 32768) { m_name_pointer_array.initialize(allocator, max_names); }
 
         u32 register_name(const char* name)
         {
-            u32 const hash = generate_hash(name);
-
             // find the name in the hash array which is sorted by hash
-            const s32 index = binary_search(m_name_hash_array.m_data, m_name_hash_array.m_size, hash);
+            const s32 index = binary_search(name);
+            if (index >= 0)
+                return index;
+            if (index < m_name_pointer_array.m_size && m_name_pointer_array.m_data[index] == name)
+                return index;
 
-            // if the name is already registered return the id
-            if (index < m_name_hash_array.m_size && m_name_hash_array.m_data[index] == hash)
-            {
-                ASSERT(ascii::compare(name, m_name_str_array.m_data + m_name_offset_array.m_data[index]) == 0);
-                return m_name_offset_array.m_data[index];
-            }
-
-            // we assume that we do not have hash collisions, so a hash is unique
-
-            // if the name is not registered insert it in the hash array
-            // make space for the new name in the hash and offset array
-            m_name_hash_array.insert(index, hash);
-            m_name_offset_array.insert(index, m_name_str_array.m_size);
-
-            // append the name in the string array
-            while (*name && m_name_str_array.m_size < m_name_str_array.m_capacity)
-                m_name_str_array.m_data[m_name_str_array.m_size++] = *name++;
+            m_name_index_array.insert(index, m_name_pointer_array.m_size);
+            m_name_pointer_array.add(name);
         }
 
-        array_t<u32>  m_name_hash_array;   // capacity = max-ids
-        array_t<u32>  m_name_offset_array; // capacity = max-ids
-        array_t<char> m_name_str_array;    // the names are stored in a single array of chars
+        s32 binary_search(const char* value) const
+        {
+            s32 low  = 0;
+            s32 high = m_name_index_array.m_size - 1;
+
+            while (low <= high)
+            {
+                s32         mid       = (low + high) / 2;
+                const char* mid_value = m_name_pointer_array.m_data[m_name_index_array.m_data[mid]];
+
+                if (mid_value < value)
+                    low = mid + 1;
+                else if (mid_value > value)
+                    high = mid - 1;
+                else
+                    return mid;
+            }
+
+            return low; // return the index where the value should be inserted
+        }
+
+        array_t<const char*> m_name_pointer_array; // capacity = max-ids (non-sorted)
+        array_t<s32>         m_name_index_array;   // capacity = max-ids (sorted by 'const char*' pointer)
     };
 
     ecs_t::ecs_t(alloc_t* allocator, u32 max_ids, u32 max_systems, u32 max_components)
@@ -298,6 +269,6 @@ namespace ncore
     };
 
     id_t        ecs_t::register_id(const char* name) { return id_t{0}; }
-    const char* ecs_t::nameof_id(id_t system) { return "";}
+    const char* ecs_t::nameof_id(id_t system) { return ""; }
 
 } // namespace ncore
