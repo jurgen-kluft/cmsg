@@ -1,6 +1,6 @@
-#include "cbase/c_allocator.h"
+#include "ccore/c_allocator.h"
+#include "ccore/c_debug.h"
 #include "cbase/c_context.h"
-#include "cbase/c_debug.h"
 #include "cbase/c_memory.h"
 #include "cbase/c_hbb.h"
 #include "cbase/c_runes.h"
@@ -15,38 +15,38 @@ namespace ncore
     //
     // The message system leans heavily on the concept of 'frame' allocators
     // to avoid memory fragmentation and to allow for fast allocation and
-    // batch based deallocation.
+    // batch or no-op based deallocation.
     //
 
-    class SystemShips : public ecs_t::ihandler
+    class SystemShips : public ecs_handler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemShips* gSystemShips = nullptr;
 
-    class SystemAI : public ecs_t::ihandler
+    class SystemAI : public ecs_handler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemAI* gSystemAI = nullptr;
 
-    class SystemGfxVfx : public ecs_t::ihandler
+    class SystemGfxVfx : public ecs_handler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemGfxVfx* gSystemGfxVfx = nullptr;
 
-    class SystemAudioSfx : public ecs_t::ihandler
+    class SystemAudioSfx : public ecs_handler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemAudioSfx* gSystemAudioSfx = nullptr;
 
-    class SystemRender : public ecs_t::ihandler
+    class SystemRender : public ecs_handler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
@@ -59,33 +59,35 @@ namespace ncore
 
         ecs_t ecs(allocator);
 
-        system_t    ships_system = ecs.register_system(gSystemShips, "system/ships");
-        component_t ship_pos_cp  = ecs.register_component<vector3_t>(ships_system, "position");
-        component_t ship_dir_cp  = ecs.register_component<vector3_t>(ships_system, "direction");
+        const system_t    ships_system   = ecs.register_system(gSystemShips, "system/ships");
+        const component_t ship_pos_cp    = ecs.register_component<vector3_t>(ships_system, "position");
+        const component_t ship_dir_cp    = ecs.register_component<vector3_t>(ships_system, "direction");
+        const component_t ship_speed_cp  = ecs.register_component<f32>(ships_system, "speed");
+        const component_t ship_radius_cp = ecs.register_component<f32>(ships_system, "radius");
 
-        entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
+        const entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
         ecs.add_component<vector3_t>(bug1, ship_pos_cp, vector3_t::zero); // by id
         ecs.add_component<vector3_t>(bug1, ship_dir_cp, vector3_t::up);   // by id
         ecs.add_component<f32>(bug1, "speed", 10.0f);                     // by name
         ecs.add_component<f32>(bug1, "radius", 1.0f);                     // by name
 
-        system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
-        system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
-        system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
-        system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
+        const system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
+        const system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
+        const system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
+        const system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
 
         msg_system& msg = ecs.msg;
 
-        id_t explosion_msg_id = ecs.register_id("msg/explosion");
+        const id_t explosion_msg_id = ecs.register_id("msg/explosion");
 
-        property_t pos_prop    = msg.register_property<vector3_t>("position", vector3_t::zero);
-        property_t radius_prop = msg.register_property<float>("radius", 10.0f);
+        const property_t pos_prop    = msg.register_property<vector3_t>("position", vector3_t::zero);
+        const property_t radius_prop = msg.register_property<float>("radius", 10.0f);
 
         // what about composing a message using named (registered) properties?
         vector3_t explosion_pos(100, 2, 5);
 
         // position, radius, damage
-        msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
+        const msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
         {
             // properties by id
             msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id
@@ -115,6 +117,7 @@ namespace ncore
     const s32       type_t<s32>::default_value       = 0;
     const s64       type_t<s64>::default_value       = 0;
     const f32       type_t<f32>::default_value       = 0.0f;
+    const f64       type_t<f64>::default_value       = 0.0;
     const bool      type_t<bool>::default_value      = false;
     const vector3_t type_t<vector3_t>::default_value = vector3_t::zero;
 
@@ -127,6 +130,7 @@ namespace ncore
     typeinfo_t type_t<s32>::typeinfo("s32", &type_t<s32>::default_value, sizeof(s32));
     typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
     typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
+    typeinfo_t type_t<f64>::typeinfo("f64", &type_t<f64>::default_value, sizeof(f64));
     typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
     typeinfo_t type_t<vector3_t>::typeinfo("vector3", &type_t<vector3_t>::default_value, sizeof(vector3_t));
 
@@ -171,7 +175,11 @@ namespace ncore
     // then we could just use the string pointers (and no need for hashing)
     struct names_db_t
     {
-        void init(alloc_t* allocator, u32 max_names = 32768) { m_name_pointer_array.initialize(allocator, max_names); }
+        void init(alloc_t* allocator, u32 max_names = 32768)
+        {
+            m_name_pointer_array.initialize(allocator, max_names);
+            m_name_index_array.initialize(allocator, max_names);
+        }
 
         u32 register_name(const char* name)
         {
@@ -193,7 +201,7 @@ namespace ncore
 
             while (low <= high)
             {
-                s32         mid       = (low + high) / 2;
+                const s32   mid       = (low + high) / 2;
                 const char* mid_value = m_name_pointer_array.m_data[m_name_index_array.m_data[mid]];
 
                 if (mid_value < value)
@@ -235,7 +243,7 @@ namespace ncore
 
     struct system_data_t
     {
-        ecs_t::ihandler* m_handler;
+        ecs_handler_t* m_handler;
         ecs_data_t*      m_ecs; // pointer to the ecs data
 
         u32            m_max_components;

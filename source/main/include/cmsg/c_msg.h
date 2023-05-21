@@ -1,31 +1,31 @@
 #ifndef __CMSG_MSG_H__
 #define __CMSG_MSG_H__
-#include "cbase/c_target.h"
+#include "ccore/c_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
 #endif
 
-#include "cbase/c_debug.h"
+#include "ccore/c_debug.h"
 
 namespace ncore
 {
     class alloc_t;
 
-    struct id_t// 32
+    struct id_t
     {
-        u32 id; 
+        u64 id; 
     }; 
-    struct system_t// 9 bits for system, 3 bits for type,
+    struct system_t
     {
-        u32 system; 
+        u64 system; 
     }; 
-    struct entity_t // 9 bits for system, 3 bits for type, 16 bits for entity, 4 bits for salt
+    struct entity_t
     {
-        u32 entity;
+        u64 entity;
     };
-    struct component_t // 9 bits for system, 3 bits for type, 16 bits for component, 4 bits for salt
+    struct component_t
     {
-        u32 component;
+        u64 component;
     }; 
     struct msg_t
     {
@@ -127,7 +127,7 @@ namespace ncore
         template <typename T> bool    is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
 
         // message - post
-
+        // this could increase a ref-count, so that we can know when to release the message
         void post(system_t system, msg_t msg);
         void post(entity_t entity, msg_t msg);
         void post(entity_t entity, component_t component, msg_t msg);
@@ -138,16 +138,17 @@ namespace ncore
     };
 
     struct ecs_data_t;
+
+    // ------------------------------------------------------------------------------------------------
+    class ecs_handler_t
+    {
+    public:
+        virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
+    };
+
     class ecs_t
     {
     public:
-        // ------------------------------------------------------------------------------------------------
-        class ihandler
-        {
-        public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
-        };
-
         ecs_t(alloc_t* allocator, u32 max_ids = 65536, u32 max_systems = 256, u32 max_components = 4096);
 
         // ------------------------------------------------------------------------------------------------
@@ -159,8 +160,8 @@ namespace ncore
         // ------------------------------------------------------------------------------------------------
         // system
 
-        system_t    register_system(ihandler* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
-        system_t    register_system(ihandler* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
+        system_t    register_system(ecs_handler_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
+        system_t    register_system(ecs_handler_t* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
         system_t    find_system(const char* name);
         system_t    find_system(id_t id);
         id_t        idof_system(system_t system);
@@ -168,13 +169,13 @@ namespace ncore
 
         // system - handler (debugging: can encapsulate a system to intercept messages for debugging)
 
-        ihandler* get_system_handler(system_t system);
-        void      set_system_handler(system_t system, ihandler* handler);
+        ecs_handler_t* get_system_handler(system_t system);
+        void      set_system_handler(system_t system, ecs_handler_t* handler);
 
         // system - entity
 
         entity_t    create_entity(system_t system, id_t id);
-        entity_t    create_entity(system_t system, const char* name);
+        entity_t    create_entity(system_t system, const char* name = nullptr);
         void        destroy_entity(entity_t entity);
         id_t        idof_entity(entity_t entity);
         const char* nameof_entity(entity_t entity);
