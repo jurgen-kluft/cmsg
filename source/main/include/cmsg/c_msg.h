@@ -11,34 +11,13 @@ namespace ncore
 {
     class alloc_t;
 
-    struct id_t
-    {
-        u64 id; 
-    }; 
-    struct system_t
-    {
-        u64 system; 
-    }; 
-    struct entity_t
-    {
-        u64 entity;
-    };
-    struct component_t
-    {
-        u64 component;
-    }; 
-    struct msg_t
-    {
-        u32 msg;
-    };
-    struct property_t
-    {
-        void* p;
-    };
-    struct value_t
-    {
-        void* p;
-    };
+    typedef u64 id_t;
+    typedef u64  system_t;
+    typedef u64  entity_t;
+    typedef u64 component_t;
+    typedef u32  msg_t;
+    typedef void* property_t;
+    typedef void* value_t;
 
     struct vector3_t
     {
@@ -117,11 +96,12 @@ namespace ncore
         msg_t begin(const char* name, u32 number_of_properties);
         void  end(msg_t msg);
 
-        // message - write/read
-
-        s32                           num_properties(msg_t msg);
+        // message - write
         template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
         template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
+
+        // message - read
+        s32                           num_properties(msg_t msg);
         template <typename T> bool    read_property(msg_t msg, property_t property, T const*& value);
         value_t                       get_property(msg_t msg, property_t property);
         template <typename T> bool    is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
@@ -170,7 +150,7 @@ namespace ncore
         // system - handler (debugging: can encapsulate a system to intercept messages for debugging)
 
         ecs_handler_t* get_system_handler(system_t system);
-        void      set_system_handler(system_t system, ecs_handler_t* handler);
+        void           set_system_handler(system_t system, ecs_handler_t* handler);
 
         // system - entity
 
