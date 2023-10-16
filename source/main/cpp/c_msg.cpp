@@ -18,95 +18,6 @@ namespace ncore
     // batch or no-op based deallocation.
     //
 
-    class SystemShips : public ecs_handler_t
-    {
-    public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
-    };
-    SystemShips* gSystemShips = nullptr;
-
-    class SystemAI : public ecs_handler_t
-    {
-    public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
-    };
-    SystemAI* gSystemAI = nullptr;
-
-    class SystemGfxVfx : public ecs_handler_t
-    {
-    public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
-    };
-    SystemGfxVfx* gSystemGfxVfx = nullptr;
-
-    class SystemAudioSfx : public ecs_handler_t
-    {
-    public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
-    };
-    SystemAudioSfx* gSystemAudioSfx = nullptr;
-
-    class SystemRender : public ecs_handler_t
-    {
-    public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
-    };
-    SystemRender* gSystemRender = nullptr;
-
-    static void use_case()
-    {
-        alloc_t* allocator = context_t::system_alloc();
-
-        ecs_t ecs(allocator);
-
-        const system_t    ships_system   = ecs.register_system(gSystemShips, "system/ships");
-        const component_t ship_pos_cp    = ecs.register_component<vector3_t>(ships_system, "position");
-        const component_t ship_dir_cp    = ecs.register_component<vector3_t>(ships_system, "direction");
-        const component_t ship_speed_cp  = ecs.register_component<f32>(ships_system, "speed");
-        const component_t ship_radius_cp = ecs.register_component<f32>(ships_system, "radius");
-
-        const entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
-        ecs.add_component<vector3_t>(bug1, ship_pos_cp, vector3_t::zero); // by id
-        ecs.add_component<vector3_t>(bug1, ship_dir_cp, vector3_t::up);   // by id
-        ecs.add_component<f32>(bug1, "speed", 10.0f);                     // by name
-        ecs.add_component<f32>(bug1, "radius", 1.0f);                     // by name
-
-        const system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
-        const system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
-        const system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
-        const system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
-
-        msg_system& msg = ecs.msg;
-
-        const id_t explosion_msg_id = ecs.register_id("msg/explosion");
-
-        const property_t pos_prop    = msg.register_property<vector3_t>("position", vector3_t::zero);
-        const property_t radius_prop = msg.register_property<float>("radius", 10.0f);
-
-        // what about composing a message using named (registered) properties?
-        vector3_t explosion_pos(100, 2, 5);
-
-        // position, radius, damage
-        const msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
-        {
-            // properties by id
-            msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id
-            msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);            // by id
-            msg.write_property<f32>(explosion_msg, "damage", 0.9f);                // by name
-        }
-        msg.end(explosion_msg);
-
-        // systems by name
-        msg.post("system/ships", explosion_msg);
-        msg.post("system/ships", "entity/bug1", explosion_msg);
-
-        // systems by id
-        msg.post(ships_system, explosion_msg);
-        msg.post(ai_system, explosion_msg);
-        msg.post(vfx_system, explosion_msg);
-        msg.post(sfx_system, explosion_msg);
-    }
-
     // the defaults of the above types are:
     const u8        type_t<u8>::default_value        = 0;
     const u16       type_t<u16>::default_value       = 0;
@@ -133,39 +44,6 @@ namespace ncore
     typeinfo_t type_t<f64>::typeinfo("f64", &type_t<f64>::default_value, sizeof(f64));
     typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
     typeinfo_t type_t<vector3_t>::typeinfo("vector3", &type_t<vector3_t>::default_value, sizeof(vector3_t));
-
-    template <typename T> struct array_t
-    {
-        void initialize(alloc_t* allocator, u32 capacity)
-        {
-            m_size     = 0;
-            m_capacity = capacity;
-            m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
-        }
-
-        void add(const T& value)
-        {
-            ASSERT(index <= m_size);
-            ASSERT(m_size < m_capacity);
-            m_data[m_size++] = value;
-        }
-
-        void insert(s32 index, const T& value)
-        {
-            ASSERT(index <= m_size);
-            ASSERT(m_size < m_capacity);
-
-            if (index < m_size)
-                nmem::memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
-
-            m_data[index] = value;
-            m_size++;
-        }
-
-        T*  m_data;
-        s32 m_size;
-        s32 m_capacity;
-    };
 
     //          name registration (ASCII only)
     // NOTE:
@@ -243,8 +121,8 @@ namespace ncore
 
     struct system_data_t
     {
-        ecs_handler_t* m_handler;
-        ecs_data_t*      m_ecs; // pointer to the ecs data
+        ecs_system_t* m_handler;
+        ecs_data_t*   m_ecs; // pointer to the ecs data
 
         u32            m_max_components;
         array_t<u16>   m_component_remap; // set to ecs 'max' components

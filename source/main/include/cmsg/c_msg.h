@@ -11,13 +11,63 @@ namespace ncore
 {
     class alloc_t;
 
-    typedef u64 id_t;
-    typedef u64  system_t;
-    typedef u64  entity_t;
-    typedef u64 component_t;
-    typedef u32  msg_t;
+    typedef u64   id_t;
+    typedef u64   system_t;
+    typedef u64   entity_t;
+    typedef u64   component_t;
+    typedef u32   msg_t;
     typedef void* property_t;
     typedef void* value_t;
+
+    template <typename T> struct array_t
+    {
+        void initialize(alloc_t* allocator, u32 capacity)
+        {
+            m_size     = 0;
+            m_capacity = capacity;
+            m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
+        }
+
+        s32 size() const { return m_size; }
+
+        T& checkout()
+        {
+            ASSERT(index <= m_size);
+            ASSERT(m_size < m_capacity);
+            return m_data[m_size];
+        }
+        void commit()
+        {
+            ASSERT(index <= m_size);
+            ASSERT(m_size < m_capacity);
+            m_size++;
+        }
+
+        void push_back(const T& value) 
+        {
+            checkout() = value;
+            commit();
+        }
+
+        T& back() { return m_data[m_size - 1]; }
+        void pop_back() { m_size--; }
+
+        void insert(s32 index, const T& value)
+        {
+            ASSERT(index <= m_size);
+            ASSERT(m_size < m_capacity);
+
+            if (index < m_size)
+                nmem::memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
+
+            m_data[index] = value;
+            m_size++;
+        }
+
+        T*  m_data;
+        s32 m_size;
+        s32 m_capacity;
+    };
 
     struct vector3_t
     {
@@ -101,10 +151,10 @@ namespace ncore
         template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
 
         // message - read
-        s32                           num_properties(msg_t msg);
-        template <typename T> bool    read_property(msg_t msg, property_t property, T const*& value);
-        value_t                       get_property(msg_t msg, property_t property);
-        template <typename T> bool    is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+        s32                        num_properties(msg_t msg);
+        template <typename T> bool read_property(msg_t msg, property_t property, T const*& value);
+        value_t                    get_property(msg_t msg, property_t property);
+        template <typename T> bool is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
 
         // message - post
         // this could increase a ref-count, so that we can know when to release the message
@@ -120,10 +170,14 @@ namespace ncore
     struct ecs_data_t;
 
     // ------------------------------------------------------------------------------------------------
-    class ecs_handler_t
+    class ecs_system_t
     {
     public:
+        virtual void on_register(entity_t entity)   = 0;
+        virtual void on_unregister(entity_t entity) = 0;
+
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
+        virtual void on_tick(f32 dt)                                           = 0;
     };
 
     class ecs_t
@@ -140,8 +194,8 @@ namespace ncore
         // ------------------------------------------------------------------------------------------------
         // system
 
-        system_t    register_system(ecs_handler_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
-        system_t    register_system(ecs_handler_t* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
+        system_t    register_system(ecs_system_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
+        system_t    register_system(ecs_system_t* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
         system_t    find_system(const char* name);
         system_t    find_system(id_t id);
         id_t        idof_system(system_t system);
@@ -149,8 +203,8 @@ namespace ncore
 
         // system - handler (debugging: can encapsulate a system to intercept messages for debugging)
 
-        ecs_handler_t* get_system_handler(system_t system);
-        void           set_system_handler(system_t system, ecs_handler_t* handler);
+        ecs_system_t* get_system_handler(system_t system);
+        void          set_system_handler(system_t system, ecs_system_t* handler);
 
         // system - entity
 
