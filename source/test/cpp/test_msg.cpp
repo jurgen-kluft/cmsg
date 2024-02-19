@@ -7,6 +7,8 @@
 
 namespace ncore
 {
+    using namespace nmsg;
+    
     class SystemShips : public ecs_system_t
     {
         // NOTE: One bit per entity, this array holds the globally maximum number of entities
