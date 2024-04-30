@@ -2,7 +2,7 @@
 #define __CMSG_MSG_H__
 #include "ccore/c_target.h"
 #ifdef USE_PRAGMA_ONCE
-#pragma once
+#    pragma once
 #endif
 
 #include "ccore/c_debug.h"
@@ -11,189 +11,226 @@ namespace ncore
 {
     class alloc_t;
 
-    struct id_t// 32
+    namespace nmsg
     {
-        u32 id; 
-    }; 
-    struct system_t// 9 bits for system, 3 bits for type,
-    {
-        u32 system; 
-    }; 
-    struct entity_t // 9 bits for system, 3 bits for type, 16 bits for entity, 4 bits for salt
-    {
-        u32 entity;
-    };
-    struct component_t // 9 bits for system, 3 bits for type, 16 bits for component, 4 bits for salt
-    {
-        u32 component;
-    }; 
-    struct msg_t
-    {
-        u32 msg;
-    };
-    struct property_t
-    {
-        void* p;
-    };
-    struct value_t
-    {
-        void* p;
-    };
+        typedef u64   id_t;
+        typedef u64   system_t;
+        typedef u64   entity_t;
+        typedef u64   component_t;
+        typedef u32   msg_t;
+        typedef void* property_t;
+        typedef void* value_t;
 
-    struct f32x3
-    {
-        float x, y, z;
-
-        static f32x3 zero;
-        static f32x3 up;
-    };
-
-    struct typeinfo_t
-    {
-        typeinfo_t(const char* type_name, const void* default_value, u32 sizeof_type)
-            : m_type_name(type_name)
-            , m_default_value(default_value)
-            , m_sizeof(sizeof_type)
+        template <typename T> struct array_t
         {
-        }
-        const char* m_type_name;
-        const void* m_default_value;
-        u32         m_sizeof;
-    };
+            void initialize(alloc_t* allocator, u32 capacity)
+            {
+                m_size     = 0;
+                m_capacity = capacity;
+                m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
+            }
 
-    template <typename T> struct type_t
-    {
-        static const T    default_value;
-        static typeinfo_t typeinfo;
-    };
+            s32 size() const { return m_size; }
 
-    // ------------------------------------------------------------------------------------------------
-    // types
-    static const type_t<u8>        type_u8;
-    static const type_t<u16>       type_u16;
-    static const type_t<u32>       type_u32;
-    static const type_t<u64>       type_u64;
-    static const type_t<s8>        type_s8;
-    static const type_t<s16>       type_s16;
-    static const type_t<s32>       type_s32;
-    static const type_t<s64>       type_s64;
-    static const type_t<f32>       type_f32;
-    static const type_t<bool>      type_bool;
-    static const type_t<f32x3>     type_float3;
+            T& checkout()
+            {
+                ASSERT(index <= m_size);
+                ASSERT(m_size < m_capacity);
+                return m_data[m_size];
+            }
+            void commit()
+            {
+                ASSERT(index <= m_size);
+                ASSERT(m_size < m_capacity);
+                m_size++;
+            }
 
-    // ------------------------------------------------------------------------------------------------
-    // id management
-    class id_system_t
-    {
-    public:
-        id_t        register_id(const char* name);
-        void        unregister_id(id_t id);
-        const char* nameof_id(id_t system) const;
-    };
+            void push_back(const T& value)
+            {
+                checkout() = value;
+                commit();
+            }
 
-    // ------------------------------------------------------------------------------------------------
-    // message system
-    class msg_system_t
-    {
-    public:
-        void init(alloc_t* alloc);
-        void shutdown(alloc_t* alloc);
+            T&   back() { return m_data[m_size - 1]; }
+            void pop_back() { m_size--; }
 
-        template <typename T> property_t register_property(id_t id, const T& default_value = type_t<T>::default_value);
-        template <typename T> property_t register_property(const char* name, const T& default_value = type_t<T>::default_value);
+            void insert(s32 index, const T& value)
+            {
+                ASSERT(index <= m_size);
+                ASSERT(m_size < m_capacity);
 
-        // message - property
-        template <typename T> void property_default_value(property_t property, T const*& outValue);
-        id_t                       idof_property(property_t property);
-        s32                        sizeof_property(property_t property);
-        const char*                nameof_property(property_t property);
+                if (index < m_size)
+                    nmem::memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
 
-        // ------------------------------------------------------------------------------------------------
-        // message - writing
-        msg_t                         begin(id_t id, u32 number_of_properties);
-        msg_t                         begin(const char* name, u32 number_of_properties);
-        template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
-        template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
-        void                          end(msg_t msg);
+                m_data[index] = value;
+                m_size++;
+            }
 
-        // ------------------------------------------------------------------------------------------------
-        // message - reading
-        void                          open(msg_t msg);
-        s32                           num_properties(msg_t msg);
-        template <typename T> bool    read_property(msg_t msg, property_t property, T const*& value);
-        value_t                       get_property(msg_t msg, property_t property);
-        template <typename T> bool    is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
-        void                          close(msg_t msg);
-
-        // message - posting
-        void post(system_t system, msg_t msg);
-        void post(entity_t entity, msg_t msg);
-        void post(entity_t entity, component_t component, msg_t msg);
-        void post(const char* system, msg_t msg);
-        void post(const char* system, const char* entity, msg_t msg);
-        void post(const char* system, const char* entity, const char* component, msg_t msg);
-    };
-
-    struct ecs_data_t;
-    class ecs_t
-    {
-    public:
-        // ------------------------------------------------------------------------------------------------
-        class ihandler_t
-        {
-        public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
+            T*  m_data;
+            s32 m_size;
+            s32 m_capacity;
         };
 
-        ecs_t(alloc_t* allocator, u32 max_ids = 65536, u32 max_systems = 256, u32 max_components = 4096);
+        struct f32x3
+        {
+            float x, y, z;
 
+            static f32x3 zero;
+            static f32x3 up;
+        };
 
-        // ------------------------------------------------------------------------------------------------
-        // system
+        struct typeinfo_t
+        {
+            typeinfo_t(const char* type_name, const void* default_value, u32 sizeof_type)
+                : m_type_name(type_name)
+                , m_default_value(default_value)
+                , m_sizeof(sizeof_type)
+            {
+            }
+            const char* m_type_name;
+            const void* m_default_value;
+            u32         m_sizeof;
+        };
 
-        system_t    register_system(ihandler_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
-        system_t    register_system(ihandler_t* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
-        system_t    find_system(const char* name);
-        system_t    find_system(id_t id);
-        id_t        idof_system(system_t system);
-        const char* nameof_system(system_t system);
-
-        // system - handler (debugging: can encapsulate a system to intercept messages for debugging)
-
-        ihandler_t* get_system_handler(system_t system);
-        void        set_system_handler(system_t system, ihandler_t* handler);
-
-        // system - entity
-
-        entity_t    create_entity(system_t system, id_t id);
-        entity_t    create_entity(system_t system, const char* name);
-        void        destroy_entity(entity_t entity);
-        id_t        idof_entity(entity_t entity);
-        const char* nameof_entity(entity_t entity);
-
-        // system - component
-
-        template <typename T> component_t register_component(id_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
-        template <typename T> component_t register_component(const char* name, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
-        template <typename T> bool        typeof_component(component_t component, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
-        id_t                              idof_component(component_t component);
-        const char*                       nameof_component(component_t component);
+        template <typename T> struct type_t
+        {
+            static const T    default_value;
+            static typeinfo_t typeinfo;
+        };
 
         // ------------------------------------------------------------------------------------------------
-        // entity - components
-        // uses 'T const* default_value = &T::default_value' to recognize type
+        // types
+        static const type_t<u8>        type_u8;
+        static const type_t<u16>       type_u16;
+        static const type_t<u32>       type_u32;
+        static const type_t<u64>       type_u64;
+        static const type_t<s8>        type_s8;
+        static const type_t<s16>       type_s16;
+        static const type_t<s32>       type_s32;
+        static const type_t<s64>       type_s64;
+        static const type_t<f32>       type_f32;
+        static const type_t<bool>      type_bool;
+        static const type_t<f32x3>     type_vector3;
 
-        template <typename T> void add_component(entity_t entity, component_t component, const T& default_value);
-        template <typename T> void add_component(entity_t entity, const char* component, const T& default_value);
-        template <typename T> bool has_component(entity_t entity, component_t component);
-        template <typename T> bool get_component(entity_t entity, component_t component, T& outValue);
-        template <typename T> bool get_component(entity_t entity, component_t component, T*& outValue);
-        void                       remove_component(entity_t entity, component_t component);
+        // ------------------------------------------------------------------------------------------------
+        // message
+        class msg_system
+        {
+        public:
+            msg_system(alloc_t* alloc);
 
-        msg_system_t  msg;
-        ecs_data_t*   data;
-    };
+            template <typename T> property_t register_property(id_t id, const T& default_value = type_t<T>::default_value);
+            template <typename T> property_t register_property(const char* name, const T& default_value = type_t<T>::default_value);
 
+            // message - property
+            template <typename T> void property_default_value(property_t property, T const*& outValue);
+            id_t                       idof_property(property_t property);
+            s32                        sizeof_property(property_t property);
+            const char*                nameof_property(property_t property);
+
+            // ------------------------------------------------------------------------------------------------
+            // message - begin/end, open/close
+
+            // message - writing
+            msg_t                         begin(id_t id, u32 number_of_properties);
+            msg_t                         begin(const char* name, u32 number_of_properties);
+            template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
+            template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
+            void                          end(msg_t msg);
+
+            // message - reading
+            void                       open(msg_t msg);
+            s32                        num_properties(msg_t msg);
+            template <typename T> bool read_property(msg_t msg, property_t property, T const*& value);
+            value_t                    get_property(msg_t msg, property_t property);
+            template <typename T> bool is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            void                       close(msg_t msg);
+
+            // message - posting
+            // Note: this could increase a ref-count, so that we can know when to release the message
+            void post(system_t system, msg_t msg);
+            void post(entity_t entity, msg_t msg);
+            void post(entity_t entity, component_t component, msg_t msg);
+
+            void post(const char* system, msg_t msg);
+            void post(const char* system, const char* entity, msg_t msg);
+            void post(const char* system, const char* entity, const char* component, msg_t msg);
+        };
+
+        struct ecs_data_t;
+
+        // ------------------------------------------------------------------------------------------------
+        class ecs_system_t
+        {
+        public:
+            virtual void on_register(entity_t entity)   = 0;
+            virtual void on_unregister(entity_t entity) = 0;
+
+            virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
+            virtual void on_tick(f32 dt)                                           = 0;
+        };
+
+        // ------------------------------------------------------------------------------------------------
+        // id
+        class id_system_t
+        {
+        public:
+            id_t        register_id(const char* name);
+            void        unregister_id(id_t id);
+            const char* nameof_id(id_t system) const;
+        };
+
+        class ecs_t
+        {
+        public:
+            ecs_t(alloc_t* allocator, u32 max_ids = 65536, u32 max_systems = 256, u32 max_components = 4096);
+
+            // ------------------------------------------------------------------------------------------------
+            // system
+
+            system_t    register_system(ecs_system_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
+            system_t    register_system(ecs_system_t* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
+            system_t    find_system(const char* name);
+            system_t    find_system(id_t id);
+            id_t        idof_system(system_t system);
+            const char* nameof_system(system_t system);
+
+            // system - handler (debugging: can encapsulate a system to intercept messages for debugging)
+
+            ecs_system_t* get_system_handler(system_t system);
+            void          set_system_handler(system_t system, ecs_system_t* handler);
+
+            // system - entity
+
+            entity_t    create_entity(system_t system, id_t id);
+            entity_t    create_entity(system_t system, const char* name = nullptr);
+            void        destroy_entity(entity_t entity);
+            id_t        idof_entity(entity_t entity);
+            const char* nameof_entity(entity_t entity);
+
+            // system - component
+
+            template <typename T> component_t register_component(id_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            template <typename T> component_t register_component(const char* name, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            template <typename T> bool        typeof_component(component_t component, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            id_t                              idof_component(component_t component);
+            const char*                       nameof_component(component_t component);
+
+            // ------------------------------------------------------------------------------------------------
+            // entity - components
+            // uses 'T const* default_value = &T::default_value' to recognize type
+
+            template <typename T> void add_component(entity_t entity, component_t component, const T& default_value);
+            template <typename T> void add_component(entity_t entity, const char* component, const T& default_value);
+            template <typename T> bool has_component(entity_t entity, component_t component);
+            template <typename T> bool get_component(entity_t entity, component_t component, T& outValue);
+            template <typename T> bool get_component(entity_t entity, component_t component, T*& outValue);
+            void                       remove_component(entity_t entity, component_t component);
+
+            msg_system  msg;
+            ecs_data_t* data;
+        };
+    } // namespace nmsg
 } // namespace ncore
 
 #endif // __CMSG_MSG_H__
