@@ -1,11 +1,11 @@
 #ifndef __CMSG_MSG_H__
 #define __CMSG_MSG_H__
-#include "cbase/c_target.h"
+#include "ccore/c_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
 #endif
 
-#include "cbase/c_debug.h"
+#include "ccore/c_debug.h"
 
 namespace ncore
 {
@@ -40,25 +40,12 @@ namespace ncore
         void* p;
     };
 
-    struct vector3_t
+    struct f32x3
     {
-        vector3_t()
-            : x(0)
-            , y(0)
-            , z(0)
-        {
-        }
-        vector3_t(float x, float y, float z)
-            : x(x)
-            , y(y)
-            , z(z)
-        {
-        }
-
         float x, y, z;
 
-        static vector3_t zero;
-        static vector3_t up;
+        static f32x3 zero;
+        static f32x3 up;
     };
 
     struct typeinfo_t
@@ -92,14 +79,25 @@ namespace ncore
     static const type_t<s64>       type_s64;
     static const type_t<f32>       type_f32;
     static const type_t<bool>      type_bool;
-    static const type_t<vector3_t> type_vector3;
+    static const type_t<f32x3>     type_float3;
 
     // ------------------------------------------------------------------------------------------------
-    // message
-    class msg_system
+    // id management
+    class id_system_t
     {
     public:
-        msg_system(alloc_t* alloc);
+        id_t        register_id(const char* name);
+        void        unregister_id(id_t id);
+        const char* nameof_id(id_t system) const;
+    };
+
+    // ------------------------------------------------------------------------------------------------
+    // message system
+    class msg_system_t
+    {
+    public:
+        void init(alloc_t* alloc);
+        void shutdown(alloc_t* alloc);
 
         template <typename T> property_t register_property(id_t id, const T& default_value = type_t<T>::default_value);
         template <typename T> property_t register_property(const char* name, const T& default_value = type_t<T>::default_value);
@@ -111,27 +109,26 @@ namespace ncore
         const char*                nameof_property(property_t property);
 
         // ------------------------------------------------------------------------------------------------
-        // message - begin/end, open/close
-
-        msg_t begin(id_t id, u32 number_of_properties);
-        msg_t begin(const char* name, u32 number_of_properties);
-        void  end(msg_t msg);
-
-        // message - write/read
-
-        s32                           num_properties(msg_t msg);
+        // message - writing
+        msg_t                         begin(id_t id, u32 number_of_properties);
+        msg_t                         begin(const char* name, u32 number_of_properties);
         template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
         template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
+        void                          end(msg_t msg);
+
+        // ------------------------------------------------------------------------------------------------
+        // message - reading
+        void                          open(msg_t msg);
+        s32                           num_properties(msg_t msg);
         template <typename T> bool    read_property(msg_t msg, property_t property, T const*& value);
         value_t                       get_property(msg_t msg, property_t property);
         template <typename T> bool    is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+        void                          close(msg_t msg);
 
-        // message - post
-
+        // message - posting
         void post(system_t system, msg_t msg);
         void post(entity_t entity, msg_t msg);
         void post(entity_t entity, component_t component, msg_t msg);
-
         void post(const char* system, msg_t msg);
         void post(const char* system, const char* entity, msg_t msg);
         void post(const char* system, const char* entity, const char* component, msg_t msg);
@@ -142,7 +139,7 @@ namespace ncore
     {
     public:
         // ------------------------------------------------------------------------------------------------
-        class ihandler
+        class ihandler_t
         {
         public:
             virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
@@ -150,17 +147,12 @@ namespace ncore
 
         ecs_t(alloc_t* allocator, u32 max_ids = 65536, u32 max_systems = 256, u32 max_components = 4096);
 
-        // ------------------------------------------------------------------------------------------------
-        // id
-
-        id_t        register_id(const char* name);
-        const char* nameof_id(id_t system);
 
         // ------------------------------------------------------------------------------------------------
         // system
 
-        system_t    register_system(ihandler* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
-        system_t    register_system(ihandler* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
+        system_t    register_system(ihandler_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
+        system_t    register_system(ihandler_t* system, const char* name, u32 max_entities = 1024, u32 max_components = 256);
         system_t    find_system(const char* name);
         system_t    find_system(id_t id);
         id_t        idof_system(system_t system);
@@ -168,8 +160,8 @@ namespace ncore
 
         // system - handler (debugging: can encapsulate a system to intercept messages for debugging)
 
-        ihandler* get_system_handler(system_t system);
-        void      set_system_handler(system_t system, ihandler* handler);
+        ihandler_t* get_system_handler(system_t system);
+        void        set_system_handler(system_t system, ihandler_t* handler);
 
         // system - entity
 
@@ -181,8 +173,8 @@ namespace ncore
 
         // system - component
 
-        template <typename T> component_t register_component(system_t system, id_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
-        template <typename T> component_t register_component(system_t system, const char* name, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+        template <typename T> component_t register_component(id_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+        template <typename T> component_t register_component(const char* name, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
         template <typename T> bool        typeof_component(component_t component, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
         id_t                              idof_component(component_t component);
         const char*                       nameof_component(component_t component);
@@ -198,8 +190,8 @@ namespace ncore
         template <typename T> bool get_component(entity_t entity, component_t component, T*& outValue);
         void                       remove_component(entity_t entity, component_t component);
 
-        msg_system  msg;
-        ecs_data_t* data;
+        msg_system_t  msg;
+        ecs_data_t*   data;
     };
 
 } // namespace ncore

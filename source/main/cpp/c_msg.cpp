@@ -1,6 +1,6 @@
 #include "cbase/c_allocator.h"
 #include "cbase/c_context.h"
-#include "cbase/c_debug.h"
+#include "ccore/c_debug.h"
 #include "cbase/c_memory.h"
 #include "cbase/c_hbb.h"
 #include "cbase/c_runes.h"
@@ -18,57 +18,67 @@ namespace ncore
     // batch based deallocation.
     //
 
-    class SystemShips : public ecs_t::ihandler
+    class SystemShips : public ecs_t::ihandler_t
     {
     public:
+        void set_position_cp(ship_pos_cp cp);
+        void set_direction_cp(ship_dir_cp cp);
+
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemShips* gSystemShips = nullptr;
 
-    class SystemAI : public ecs_t::ihandler
+    class SystemAI : public ecs_t::ihandler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemAI* gSystemAI = nullptr;
 
-    class SystemGfxVfx : public ecs_t::ihandler
+    class SystemGfxVfx : public ecs_t::ihandler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemGfxVfx* gSystemGfxVfx = nullptr;
 
-    class SystemAudioSfx : public ecs_t::ihandler
+    class SystemAudioSfx : public ecs_t::ihandler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemAudioSfx* gSystemAudioSfx = nullptr;
 
-    class SystemRender : public ecs_t::ihandler
+    class SystemRender : public ecs_t::ihandler_t
     {
     public:
         virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
     };
     SystemRender* gSystemRender = nullptr;
 
-
     static void use_case()
     {
         alloc_t* allocator = context_t::system_alloc();
+        gSystemShips = allocator->construct<SystemShips>();
+        gSystemAI = allocator->construct<SystemAI>();
+        gSystemGfxVfx = allocator->construct<SystemGfxVfx>();
+        gSystemAudioSfx = allocator->construct<SystemAudioSfx>();
+        gSystemRender = allocator->construct<SystemRender>();
 
         ecs_t ecs(allocator);
 
         system_t    ships_system = ecs.register_system(gSystemShips, "system/ships");
-        component_t ship_pos_cp  = ecs.register_component<vector3_t>(ships_system, "position");
-        component_t ship_dir_cp  = ecs.register_component<vector3_t>(ships_system, "direction");
+        component_t ship_pos_cp  = ecs.register_component<f32x3>("position");
+        component_t ship_dir_cp  = ecs.register_component<f32x3>("direction");
+
+        gSystemShips->set_position_cp(ship_pos_cp);
+        gSystemShips->set_direction_cp(ship_dir_cp);
 
         entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
-        ecs.add_component<vector3_t>(bug1, ship_pos_cp, vector3_t::zero); // by id
-        ecs.add_component<vector3_t>(bug1, ship_dir_cp, vector3_t::up);   // by id
-        ecs.add_component<f32>(bug1, "speed", 10.0f);                     // by name
-        ecs.add_component<f32>(bug1, "radius", 1.0f);                     // by name
+        ecs.add_component<f32x3>(bug1, ship_pos_cp, f32x3::zero); // by id
+        ecs.add_component<f32x3>(bug1, ship_dir_cp, f32x3::up);   // by id
+        ecs.add_component<f32>(bug1, "speed", 10.0f);               // by name
+        ecs.add_component<f32>(bug1, "radius", 1.0f);               // by name
 
         system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
         system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
@@ -79,19 +89,19 @@ namespace ncore
 
         id_t explosion_msg_id = ecs.register_id("msg/explosion");
 
-        property_t pos_prop    = msg.register_property<vector3_t>("position", vector3_t::zero);
+        property_t pos_prop    = msg.register_property<f32x3>("position", f32x3::zero);
         property_t radius_prop = msg.register_property<float>("radius", 10.0f);
 
         // what about composing a message using named (registered) properties?
-        vector3_t explosion_pos(100, 2, 5);
+        f32x3 explosion_pos {100, 2, 5};
 
         // position, radius, damage
         msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
         {
             // properties by id
-            msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id
-            msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);            // by id
-            msg.write_property<f32>(explosion_msg, "damage", 0.9f);                // by name
+            msg.write_property<f32x3>(explosion_msg, pos_prop, explosion_pos); // by id
+            msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);         // by id
+            msg.write_property<f32>(explosion_msg, "damage", 0.9f);             // by name
         }
         msg.end(explosion_msg);
 
@@ -106,19 +116,18 @@ namespace ncore
         msg.post(sfx_system, explosion_msg);
     }
 
-
     // the defaults of the above types are:
-    const u8        type_t<u8>::default_value        = 0;
-    const u16       type_t<u16>::default_value       = 0;
-    const u32       type_t<u32>::default_value       = 0;
-    const u64       type_t<u64>::default_value       = 0;
-    const s8        type_t<s8>::default_value        = 0;
-    const s16       type_t<s16>::default_value       = 0;
-    const s32       type_t<s32>::default_value       = 0;
-    const s64       type_t<s64>::default_value       = 0;
-    const f32       type_t<f32>::default_value       = 0.0f;
-    const bool      type_t<bool>::default_value      = false;
-    const vector3_t type_t<vector3_t>::default_value = vector3_t::zero;
+    const u8     type_t<u8>::default_value     = 0;
+    const u16    type_t<u16>::default_value    = 0;
+    const u32    type_t<u32>::default_value    = 0;
+    const u64    type_t<u64>::default_value    = 0;
+    const s8     type_t<s8>::default_value     = 0;
+    const s16    type_t<s16>::default_value    = 0;
+    const s32    type_t<s32>::default_value    = 0;
+    const s64    type_t<s64>::default_value    = 0;
+    const f32    type_t<f32>::default_value    = 0.0f;
+    const bool   type_t<bool>::default_value   = false;
+    const f32x3 type_t<f32x3>::default_value = f32x3::zero;
 
     typeinfo_t type_t<u8>::typeinfo("u8", &type_t<u8>::default_value, sizeof(u8));
     typeinfo_t type_t<u16>::typeinfo("u16", &type_t<u16>::default_value, sizeof(u16));
@@ -130,14 +139,14 @@ namespace ncore
     typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
     typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
     typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
-    typeinfo_t type_t<vector3_t>::typeinfo("vector3", &type_t<vector3_t>::default_value, sizeof(vector3_t));
+    typeinfo_t type_t<f32x3>::typeinfo("vector3", &type_t<f32x3>::default_value, sizeof(f32x3));
 
     template <typename T> struct array_t
     {
         void initialize(alloc_t* allocator, u32 capacity)
         {
-            m_size      = 0;
-            m_capacity  = capacity;
+            m_size     = 0;
+            m_capacity = capacity;
             m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
         }
 
@@ -198,9 +207,9 @@ namespace ncore
 
         static u32 generate_hash(const char* name)
         {
-            u64 const seed = 0;
+            u64 const seed  = 0;
             u64 const prime = 0x9E3779B185EBCA87ULL;
-            u64 hash = seed + prime;
+            u64       hash  = seed + prime;
             while (*name)
             {
                 hash ^= *name++;
@@ -264,7 +273,7 @@ namespace ncore
 
     struct system_data_t
     {
-        ecs_t::ihandler* m_handler;
+        ecs_t::ihandler_t* m_handler;
         ecs_data_t*      m_ecs; // pointer to the ecs data
 
         u32            m_max_components;
@@ -297,7 +306,8 @@ namespace ncore
         array_t<system_data_t> m_system_array; // capacity = max-components
     };
 
-    id_t        ecs_t::register_id(const char* name) { return id_t{0}; }
-    const char* ecs_t::nameof_id(id_t system) { return "";}
+    id_t        id_system_t::register_id(const char* name) { return id_t{0}; }
+    void        id_system_t::unregister_id(id_t id) {}
+    const char* id_system_t::nameof_id(id_t system) const { return ""; }
 
 } // namespace ncore
