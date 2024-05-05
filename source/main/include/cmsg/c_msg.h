@@ -100,24 +100,35 @@ namespace ncore
 
         // ------------------------------------------------------------------------------------------------
         // types
-        static const type_t<u8>        type_u8;
-        static const type_t<u16>       type_u16;
-        static const type_t<u32>       type_u32;
-        static const type_t<u64>       type_u64;
-        static const type_t<s8>        type_s8;
-        static const type_t<s16>       type_s16;
-        static const type_t<s32>       type_s32;
-        static const type_t<s64>       type_s64;
-        static const type_t<f32>       type_f32;
-        static const type_t<bool>      type_bool;
-        static const type_t<f32x3>     type_vector3;
+        static const type_t<u8>    type_u8;
+        static const type_t<u16>   type_u16;
+        static const type_t<u32>   type_u32;
+        static const type_t<u64>   type_u64;
+        static const type_t<s8>    type_s8;
+        static const type_t<s16>   type_s16;
+        static const type_t<s32>   type_s32;
+        static const type_t<s64>   type_s64;
+        static const type_t<f32>   type_f32;
+        static const type_t<f64>   type_f64;
+        static const type_t<bool>  type_bool;
+        static const type_t<f32x3> type_f32x3;
+
+        // ------------------------------------------------------------------------------------------------
+        // id
+        class id_system_t
+        {
+        public:
+            id_t        register_id(const char* name);
+            void        unregister_id(id_t id);
+            const char* nameof_id(id_t system) const;
+        };
 
         // ------------------------------------------------------------------------------------------------
         // message
-        class msg_system
+        class msg_system_t
         {
         public:
-            msg_system(alloc_t* alloc);
+            msg_system_t(id_system_t* id_system, alloc_t* alloc);
 
             template <typename T> property_t register_property(id_t id, const T& default_value = type_t<T>::default_value);
             template <typename T> property_t register_property(const char* name, const T& default_value = type_t<T>::default_value);
@@ -132,8 +143,8 @@ namespace ncore
             // message - begin/end, open/close
 
             // message - writing
-            msg_t                         begin(id_t id, u32 number_of_properties);
-            msg_t                         begin(const char* name, u32 number_of_properties);
+            msg_t                         begin(id_t id);
+            msg_t                         begin(const char* name);
             template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
             template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
             void                          end(msg_t msg);
@@ -147,7 +158,6 @@ namespace ncore
             void                       close(msg_t msg);
 
             // message - posting
-            // Note: this could increase a ref-count, so that we can know when to release the message
             void post(system_t system, msg_t msg);
             void post(entity_t entity, msg_t msg);
             void post(entity_t entity, component_t component, msg_t msg);
@@ -155,6 +165,8 @@ namespace ncore
             void post(const char* system, msg_t msg);
             void post(const char* system, const char* entity, msg_t msg);
             void post(const char* system, const char* entity, const char* component, msg_t msg);
+
+            id_system_t* m_id_system;
         };
 
         struct ecs_data_t;
@@ -170,20 +182,10 @@ namespace ncore
             virtual void on_tick(f32 dt)                                           = 0;
         };
 
-        // ------------------------------------------------------------------------------------------------
-        // id
-        class id_system_t
-        {
-        public:
-            id_t        register_id(const char* name);
-            void        unregister_id(id_t id);
-            const char* nameof_id(id_t system) const;
-        };
-
         class ecs_t
         {
         public:
-            ecs_t(alloc_t* allocator, u32 max_ids = 65536, u32 max_systems = 256, u32 max_components = 4096);
+            ecs_t(id_system_t* id_system, u32 max_ids, u32 max_systems, u32 max_components, alloc_t* allocator);
 
             // ------------------------------------------------------------------------------------------------
             // system
@@ -227,8 +229,8 @@ namespace ncore
             template <typename T> bool get_component(entity_t entity, component_t component, T*& outValue);
             void                       remove_component(entity_t entity, component_t component);
 
-            msg_system  msg;
-            ecs_data_t* data;
+            msg_system_t msg;
+            ecs_data_t*  data;
         };
     } // namespace nmsg
 } // namespace ncore

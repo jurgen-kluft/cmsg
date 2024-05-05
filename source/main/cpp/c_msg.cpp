@@ -80,7 +80,8 @@ namespace ncore
         {
             alloc_t* allocator = context_t::system_alloc();
 
-            ecs_t ecs(allocator);
+            id_system_t id_system;
+            ecs_t ecs(&id_system, 65536, 1024, 1024, allocator);
             id_system_t ids;
 
             system_t    ships_system = ecs.register_system(gSystemShips, "system/ships");
@@ -98,7 +99,7 @@ namespace ncore
             system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
             system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
 
-            msg_system& msg = ecs.msg;
+            msg_system_t& msg = ecs.msg;
 
             id_t explosion_msg_id = ids.register_id("msg/explosion");
 
@@ -109,7 +110,7 @@ namespace ncore
             f32x3 explosion_pos {100, 2, 5};
 
             // position, radius, damage
-            msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
+            msg_t explosion_msg = msg.begin(explosion_msg_id);
             {
                 // properties by id
                 msg.write_property<f32x3>(explosion_msg, pos_prop, explosion_pos); // by id
@@ -249,7 +250,7 @@ namespace ncore
 
                 // we assume that we do not have hash collisions, so a hash is unique
 
-                // if the name is not registered insert it in the hash array
+                // if the name is not registered, insert it in the hash array
                 // make space for the new name in the hash and offset array
                 m_name_hash_array.insert(index, hash);
                 m_name_offset_array.insert(index, m_name_str_array.m_size);
@@ -264,8 +265,8 @@ namespace ncore
             array_t<char> m_name_str_array;    // the names are stored in a single array of chars
         };
 
-        ecs_t::ecs_t(alloc_t* allocator, u32 max_ids, u32 max_systems, u32 max_components)
-            : msg(allocator)
+        ecs_t::ecs_t(id_system_t* id_system, u32 max_ids, u32 max_systems, u32 max_components, alloc_t* allocator)
+            : msg(id_system, allocator)
             , data(nullptr)
         {
         }
