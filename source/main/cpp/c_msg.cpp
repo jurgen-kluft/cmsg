@@ -157,32 +157,6 @@ namespace ncore
         typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
         typeinfo_t type_t<f32x3>::typeinfo("f32x3", &type_t<f32x3>::default_value, sizeof(f32x3));
 
-        template <typename T> struct array_t
-        {
-            void initialize(alloc_t* allocator, u32 capacity)
-            {
-                m_size     = 0;
-                m_capacity = capacity;
-                m_data     = (T*)allocator->allocate(sizeof(T) * m_capacity);
-            }
-
-            void insert(s32 index, const T& value)
-            {
-                ASSERT(index <= m_size);
-                ASSERT(m_size < m_capacity);
-
-                if (index < m_size)
-                    nmem::memmove(m_data + index + 1, m_data + index, sizeof(T) * (m_size - index));
-
-                m_data[index] = value;
-                m_size++;
-            }
-
-            T*  m_data;
-            s32 m_size;
-            s32 m_capacity;
-        };
-
         static s32 binary_search(const u32* array, u32 size, u32 value)
         {
             s32 low  = 0;
