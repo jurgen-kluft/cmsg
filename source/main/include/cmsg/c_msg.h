@@ -6,6 +6,8 @@
 #endif
 
 #include "ccore/c_debug.h"
+#include "ccore/c_allocator.h"
+#include "cbase/c_memory.h"
 
 namespace ncore
 {
@@ -13,8 +15,12 @@ namespace ncore
 
     namespace nmsg
     {
-        typedef u64   id_t;
-        typedef u64   system_t;
+        typedef u64 id_t;
+
+        struct system_t
+        {
+            u64 id;
+        };
         typedef u64   entity_t;
         typedef u64   component_t;
         typedef u32   msg_t;
@@ -34,13 +40,11 @@ namespace ncore
 
             T& checkout()
             {
-                ASSERT(index <= m_size);
                 ASSERT(m_size < m_capacity);
                 return m_data[m_size];
             }
             void commit()
             {
-                ASSERT(index <= m_size);
                 ASSERT(m_size < m_capacity);
                 m_size++;
             }
@@ -69,6 +73,14 @@ namespace ncore
             T*  m_data;
             s32 m_size;
             s32 m_capacity;
+        };
+
+        struct vector3_t
+        {
+            float x, y, z;
+
+            static vector3_t zero;
+            static vector3_t up;
         };
 
         struct f32x3
@@ -188,6 +200,11 @@ namespace ncore
             ecs_t(id_system_t* id_system, u32 max_ids, u32 max_systems, u32 max_components, alloc_t* allocator);
 
             // ------------------------------------------------------------------------------------------------
+            // id's
+            
+            id_t        register_id(const char* name);
+
+            // ------------------------------------------------------------------------------------------------
             // system
 
             system_t    register_system(ecs_system_t* system, id_t id, u32 max_entities = 1024, u32 max_components = 256);
@@ -212,8 +229,9 @@ namespace ncore
 
             // system - component
 
-            template <typename T> component_t register_component(id_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
-            template <typename T> component_t register_component(const char* name, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            template <typename T> component_t register_component(system_t id, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            template <typename T> component_t register_component(system_t id, const char* name);
+            template <typename T> component_t register_component(const char* name);
             template <typename T> bool        typeof_component(component_t component, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
             id_t                              idof_component(component_t component);
             const char*                       nameof_component(component_t component);

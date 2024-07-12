@@ -81,7 +81,7 @@ namespace ncore
             alloc_t* allocator = context_t::system_alloc();
 
             id_system_t id_system;
-            ecs_t ecs(&id_system, 65536, 1024, 1024, allocator);
+            ecs_t       ecs(&id_system, 65536, 1024, 1024, allocator);
             id_system_t ids;
 
             system_t    ships_system = ecs.register_system(gSystemShips, "system/ships");
@@ -107,7 +107,7 @@ namespace ncore
             property_t radius_prop = msg.register_property<float>("radius", 10.0f);
 
             // what about composing a message using named (registered) properties?
-            f32x3 explosion_pos {100, 2, 5};
+            f32x3 explosion_pos{100, 2, 5};
 
             // position, radius, damage
             msg_t explosion_msg = msg.begin(explosion_msg_id);
@@ -129,33 +129,6 @@ namespace ncore
             msg.post(vfx_system, explosion_msg);
             msg.post(sfx_system, explosion_msg);
         }
-
-        // the defaults of the above types are:
-        const u8    type_t<u8>::default_value    = 0;
-        const u16   type_t<u16>::default_value   = 0;
-        const u32   type_t<u32>::default_value   = 0;
-        const u64   type_t<u64>::default_value   = 0;
-        const s8    type_t<s8>::default_value    = 0;
-        const s16   type_t<s16>::default_value   = 0;
-        const s32   type_t<s32>::default_value   = 0;
-        const s64   type_t<s64>::default_value   = 0;
-        const f32   type_t<f32>::default_value   = 0.0f;
-        const f64   type_t<f64>::default_value   = 0.0f;
-        const bool  type_t<bool>::default_value  = false;
-        const f32x3 type_t<f32x3>::default_value = f32x3::zero;
-
-        typeinfo_t type_t<u8>::typeinfo("u8", &type_t<u8>::default_value, sizeof(u8));
-        typeinfo_t type_t<u16>::typeinfo("u16", &type_t<u16>::default_value, sizeof(u16));
-        typeinfo_t type_t<u32>::typeinfo("u32", &type_t<u32>::default_value, sizeof(u32));
-        typeinfo_t type_t<u64>::typeinfo("u64", &type_t<u64>::default_value, sizeof(u64));
-        typeinfo_t type_t<s8>::typeinfo("s8", &type_t<s8>::default_value, sizeof(s8));
-        typeinfo_t type_t<s16>::typeinfo("s16", &type_t<s16>::default_value, sizeof(s16));
-        typeinfo_t type_t<s32>::typeinfo("s32", &type_t<s32>::default_value, sizeof(s32));
-        typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
-        typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
-        typeinfo_t type_t<f64>::typeinfo("f64", &type_t<f64>::default_value, sizeof(f64));
-        typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
-        typeinfo_t type_t<f32x3>::typeinfo("f32x3", &type_t<f32x3>::default_value, sizeof(f32x3));
 
         static s32 binary_search(const u32* array, u32 size, u32 value)
         {
@@ -232,6 +205,8 @@ namespace ncore
                 // append the name in the string array
                 while (*name && m_name_str_array.m_size < m_name_str_array.m_capacity)
                     m_name_str_array.m_data[m_name_str_array.m_size++] = *name++;
+
+                return index;
             }
 
             array_t<u32>  m_name_hash_array;   // capacity = max-ids
@@ -264,7 +239,7 @@ namespace ncore
         struct system_data_t
         {
             ecs_system_t* m_handler;
-            ecs_data_t*        m_ecs; // pointer to the ecs data
+            ecs_data_t*   m_ecs; // pointer to the ecs data
 
             u32            m_max_components;
             array_t<u16>   m_component_remap; // set to ecs 'max' components
@@ -299,5 +274,33 @@ namespace ncore
         id_t        id_system_t::register_id(const char* name) { return id_t{0}; }
         void        id_system_t::unregister_id(id_t id) {}
         const char* id_system_t::nameof_id(id_t system) const { return ""; }
+
+        // the defaults of the above types are:
+        template <> const u8    type_t<u8>::default_value    = 0;
+        template <> const u16   type_t<u16>::default_value   = 0;
+        template <> const u32   type_t<u32>::default_value   = 0;
+        template <> const u64   type_t<u64>::default_value   = 0;
+        template <> const s8    type_t<s8>::default_value    = 0;
+        template <> const s16   type_t<s16>::default_value   = 0;
+        template <> const s32   type_t<s32>::default_value   = 0;
+        template <> const s64   type_t<s64>::default_value   = 0;
+        template <> const f32   type_t<f32>::default_value   = 0.0f;
+        template <> const f64   type_t<f64>::default_value   = 0.0f;
+        template <> const bool  type_t<bool>::default_value  = false;
+        template <> const f32x3 type_t<f32x3>::default_value = f32x3::zero;
+
+        template<> typeinfo_t type_t<u8>::typeinfo("u8", &type_t<u8>::default_value, sizeof(u8));
+        template<> typeinfo_t type_t<u16>::typeinfo("u16", &type_t<u16>::default_value, sizeof(u16));
+        template<> typeinfo_t type_t<u32>::typeinfo("u32", &type_t<u32>::default_value, sizeof(u32));
+        template<> typeinfo_t type_t<u64>::typeinfo("u64", &type_t<u64>::default_value, sizeof(u64));
+        template<> typeinfo_t type_t<s8>::typeinfo("s8", &type_t<s8>::default_value, sizeof(s8));
+        template<> typeinfo_t type_t<s16>::typeinfo("s16", &type_t<s16>::default_value, sizeof(s16));
+        template<> typeinfo_t type_t<s32>::typeinfo("s32", &type_t<s32>::default_value, sizeof(s32));
+        template<> typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
+        template<> typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
+        template<> typeinfo_t type_t<f64>::typeinfo("f64", &type_t<f64>::default_value, sizeof(f64));
+        template<> typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
+        template<> typeinfo_t type_t<f32x3>::typeinfo("f32x3", &type_t<f32x3>::default_value, sizeof(f32x3));
+
     } // namespace nmsg
 } // namespace ncore

@@ -128,8 +128,9 @@ namespace ncore
     static void use_case()
     {
         alloc_t* allocator = context_t::system_alloc();
+        id_system_t id_system;
 
-        ecs_t ecs(allocator);
+        ecs_t ecs(&id_system, 1024, 256, 256, allocator);
 
         const system_t    ships_system   = ecs.register_system(gSystemShips, "system/ships");
         const component_t ship_pos_cp    = ecs.register_component<vector3_t>(ships_system, "position");
@@ -148,7 +149,7 @@ namespace ncore
         const system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
         const system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
 
-        msg_system& msg = ecs.msg;
+        msg_system_t& msg = ecs.msg;
 
         const id_t explosion_msg_id = ecs.register_id("msg/explosion");
 
@@ -156,10 +157,10 @@ namespace ncore
         const property_t radius_prop = msg.register_property<float>("radius", 10.0f);
 
         // what about composing a message using named (registered) properties?
-        vector3_t explosion_pos(100, 2, 5);
+        vector3_t explosion_pos = {100.0f, 2.0f, 5.0f};
 
         // position, radius, damage
-        const msg_t explosion_msg = msg.begin(explosion_msg_id, 3);
+        const msg_t explosion_msg = msg.begin(explosion_msg_id);
         {
             // properties by id
             msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id

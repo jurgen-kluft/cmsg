@@ -5,13 +5,20 @@
 #    pragma once
 #endif
 
+#include "crtti/c_type_info.h"
+
 namespace ncore
 {
     class alloc_t;
 
+    namespace nrtti
+    {
+        typedef u16 type_id_t;
+        struct type_info_t;
+    } // namespace nrtti
+
     namespace nevent
     {
-
         /* Markdown
 
         ```cpp
@@ -37,7 +44,7 @@ namespace ncore
 
         ```cpp
         // ...
-        listener_t* listener = create_listener(bus, [](const event::Gold& event) // listen with lambda
+        event_listener_t* listener = create_listener(bus, [](const event::Gold& event) // listen with lambda
                         {
                              std::cout << "I received gold: " << event.goldReceived << " 💰" << std::endl;
                         });
@@ -66,16 +73,25 @@ namespace ncore
         ```
 
         */
-        struct bus_t;
+        struct event_bus_t;
 
-        bus_t* create_event_bus(alloc_t* alloc);
-        void   destroy(alloc_t* alloc, bus_t* bus);
+        event_bus_t* create_event_bus(alloc_t* alloc);
+        void   destroy(alloc_t* alloc, event_bus_t* bus);
 
         // Use C++17 to register listeners for events (std::function), see the above documentation
         // this is an empty struct, the c++ implementation will be something like
-        struct listener_t;
+        struct event_listener_t;
+        event_listener_t* register_event_listener(event_bus_t* bus, nrtti::type_id_t id);
 
-        listener_t* register_listener(bus_t* bus);
+        // structs/classes used as messages need to be registered using nrtti so that we
+        // can use the type_id_t (index) as the key for event registration.
+        template <typename T> event_listener_t* register_event_listener(event_bus_t* bus)
+        {
+            nrtti::type_id_t id = nrtti::type_info_t::get_id<T>();
+            return register_event_listener(bus, id);
+        }
+
+        template <typename T> void send_event(event_bus_t* bus, T const& event);
 
     } // namespace nevent
 } // namespace ncore
