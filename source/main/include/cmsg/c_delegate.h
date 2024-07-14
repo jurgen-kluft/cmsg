@@ -6,10 +6,34 @@
 #endif
 
 #include "ccore/c_debug.h"
+#include "ccore/c_allocator.h"
 
 namespace ncore
 {
-    static const char* unset_call_error("Attempting to invoke null callback.");
+    namespace __private__
+    {
+        inline s32 compare_mem(const void* lhs, const void* rhs, u32 size)
+        {
+            u8 const* l = (u8 const*)lhs;
+            u8 const* r = (u8 const*)rhs;
+            for (u32 i = 0; i < size; ++i)
+            {
+                if (l[i] < r[i])
+                    return -1;
+                if (l[i] > r[i])
+                    return 1;
+            }
+            return 0;
+        }
+
+        inline void copy_mem(void* dst, const void* src, u32 size)
+        {
+            u8*       d = (u8*)dst;
+            u8 const* s = (u8 const*)src;
+            for (u32 i = 0; i < size; ++i)
+                d[i] = s[i];
+        }
+    } // namespace __private__
 
     /// Stores a callback for a function taking 0 parameters.
     ///\tparam R Callback function return type.
@@ -21,14 +45,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback0(C* object, R (C::*function)())
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback0(R (*function)())
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -43,7 +67,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -53,7 +77,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -79,8 +103,7 @@ namespace ncore
         {
             if (mCallback && rhs.mCallback)
                 return (*mCallback) == (*(rhs.mCallback));
-            else
-                return mCallback == rhs.mCallback;
+            return mCallback == rhs.mCallback;
         }
 
         /// Note that comparison operators may not work with virtual function callbacks.
@@ -91,8 +114,7 @@ namespace ncore
         {
             if (mCallback && rhs.mCallback)
                 return (*mCallback) < (*(rhs.mCallback));
-            else
-                return mCallback < rhs.mCallback;
+            return mCallback < rhs.mCallback;
         }
 
         /// Returns true if the callback has been set, or false if the callback is not set and is invalid.
@@ -103,8 +125,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)();
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -112,24 +133,20 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)();
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
-        class ChildFree;
-        class ChildMethod;
-
         class Base
         {
         public:
             Base() {}
-            virtual R                  operator()()                      = 0;
-            virtual bool               operator==(const Base& rhs) const = 0;
-            virtual bool               operator<(const Base& rhs) const  = 0;
-            virtual ChildFree const*   FreeFunction()                    = 0;
-            virtual ChildMethod const* MethodFunction()                  = 0;
-            virtual void*              Comp() const                      = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()()                      = 0;
+            virtual bool        operator==(const Base& rhs) const = 0;
+            virtual bool        operator<(const Base& rhs) const  = 0;
+            virtual void const* FreeFunction() const              = 0;
+            virtual void const* MethodFunction() const            = 0;
+            virtual void*       Comp() const                      = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -144,7 +161,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = rhs.FreeFunction();
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (!r)
                     return false;
                 return (mFunc == r->mFunc);
@@ -152,14 +169,14 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = rhs.FreeFunction();
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (!r)
                     return true; // Free functions will always be less than methods (because comp returns 0).
                 return mFunc < r->mFunc;
             }
 
-            virtual ChildFree*   FreeFunction() { return this; }
-            virtual ChildMethod* MethodFunction() { return nullptr; }
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -180,7 +197,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = rhs.MethodFunction();
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (!r)
                     return false;
                 return (mObj == r->mObj) && (mFunc == r->mFunc);
@@ -188,18 +205,17 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = rhs.MethodFunction();
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (!r)
                     return mObj < rhs.Comp();
-                    
+
                 if (mObj != r->mObj)
                     return mObj < r->mObj;
-                else
-                    return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
             }
 
-            virtual ChildFree*   FreeFunction() { return nullptr; }
-            virtual ChildMethod* MethodFunction() { return this; }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -231,14 +247,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback1(C* object, R (C::*function)(T0 t0))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback1(R (*function)(T0 t0))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -253,7 +269,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -263,7 +279,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -275,7 +291,7 @@ namespace ncore
         /// Sets the callback to a specific object and member function.
         ///\param object Pointer to the object to call upon. Care should be taken that this object remains valid as long as the callback may be invoked.
         ///\param function Member function address to call.
-        template <typename C> void Reset(C* object, R (C::*function)(T0 t0)) { mCallback = new (&mMem) ChildMethod<C>(object, function); }
+        template <typename C> void Reset(C* object, R (C::*function)(T0 t0)) { mCallback = new (new_signature(), &mMem) ChildMethod<C>(object, function); }
 
         /// Sets the callback to a free function or static member function.
         ///\param function Free function address to call.
@@ -289,8 +305,7 @@ namespace ncore
         {
             if (mCallback && rhs.mCallback)
                 return (*mCallback) == (*(rhs.mCallback));
-            else
-                return mCallback == rhs.mCallback;
+            return mCallback == rhs.mCallback;
         }
 
         /// Note that comparison operators may not work with virtual function callbacks.
@@ -301,8 +316,7 @@ namespace ncore
         {
             if (mCallback && rhs.mCallback)
                 return (*mCallback) < (*(rhs.mCallback));
-            else
-                return mCallback < rhs.mCallback;
+            return mCallback < rhs.mCallback;
         }
 
         /// Returns true if the callback has been set, or false if the callback is not set and is invalid.
@@ -313,8 +327,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -322,8 +335,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -331,10 +343,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0)                 = 0;
-            virtual bool  operator==(const Base& rhs) const = 0;
-            virtual bool  operator<(const Base& rhs) const  = 0;
-            virtual void* Comp() const                      = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0)                 = 0;
+            virtual bool        operator==(const Base& rhs) const = 0;
+            virtual bool        operator<(const Base& rhs) const  = 0;
+            virtual void const* FreeFunction() const              = 0;
+            virtual void const* MethodFunction() const            = 0;
+            virtual void*       Comp() const                      = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -349,21 +363,22 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
-                else
-                    return false;
+                return false;
             }
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
-                    return mFunc < r->mFunc;
-                else
-                    return true; // Free functions will always be less than methods (because comp returns 0).
+                    return (void const*)mFunc < (void const*)r->mFunc;
+                return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -384,26 +399,25 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
-                else
-                    return false;
+                return false;
             }
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
-                    else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                    return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
-                else
-                    return mObj < rhs.Comp();
+                return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -435,14 +449,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback2(C* object, R (C::*function)(T0 t0, T1 t1))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback2(R (*function)(T0 t0, T1 t1))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -457,7 +471,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -467,7 +481,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -517,8 +531,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -526,8 +539,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -535,10 +547,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1)          = 0;
-            virtual bool  operator==(const Base& rhs) const = 0;
-            virtual bool  operator<(const Base& rhs) const  = 0;
-            virtual void* Comp() const                      = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1)          = 0;
+            virtual bool        operator==(const Base& rhs) const = 0;
+            virtual bool        operator<(const Base& rhs) const  = 0;
+            virtual void const* FreeFunction() const              = 0;
+            virtual void const* MethodFunction() const            = 0;
+            virtual void*       Comp() const                      = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -553,7 +567,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -562,12 +576,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -588,7 +605,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -597,17 +614,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -639,14 +658,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback3(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback3(R (*function)(T0 t0, T1 t1, T2 t2))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -661,7 +680,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -671,7 +690,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -721,8 +740,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -730,8 +748,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -739,10 +756,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2)   = 0;
-            virtual bool  operator==(const Base& rhs) const = 0;
-            virtual bool  operator<(const Base& rhs) const  = 0;
-            virtual void* Comp() const                      = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2)   = 0;
+            virtual bool        operator==(const Base& rhs) const = 0;
+            virtual bool        operator<(const Base& rhs) const  = 0;
+            virtual void const* FreeFunction() const              = 0;
+            virtual void const* MethodFunction() const            = 0;
+            virtual void*       Comp() const                      = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -757,7 +776,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -766,12 +785,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -792,7 +814,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -801,17 +823,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -843,14 +867,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback4(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2, T3 t3))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback4(R (*function)(T0 t0, T1 t1, T2 t2, T3 t3))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -865,7 +889,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -875,7 +899,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -925,8 +949,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -934,8 +957,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -943,10 +965,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2, T3 t3) = 0;
-            virtual bool  operator==(const Base& rhs) const      = 0;
-            virtual bool  operator<(const Base& rhs) const       = 0;
-            virtual void* Comp() const                           = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2, T3 t3) = 0;
+            virtual bool        operator==(const Base& rhs) const      = 0;
+            virtual bool        operator<(const Base& rhs) const       = 0;
+            virtual void const* FreeFunction() const                   = 0;
+            virtual void const* MethodFunction() const                 = 0;
+            virtual void*       Comp() const                           = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -961,7 +985,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -970,12 +994,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -996,7 +1023,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -1005,17 +1032,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -1047,14 +1076,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback5(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback5(R (*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -1069,7 +1098,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -1079,7 +1108,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -1129,8 +1158,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -1138,8 +1166,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -1147,10 +1174,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4) = 0;
-            virtual bool  operator==(const Base& rhs) const             = 0;
-            virtual bool  operator<(const Base& rhs) const              = 0;
-            virtual void* Comp() const                                  = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4) = 0;
+            virtual bool        operator==(const Base& rhs) const             = 0;
+            virtual bool        operator<(const Base& rhs) const              = 0;
+            virtual void const* FreeFunction() const                          = 0;
+            virtual void const* MethodFunction() const                        = 0;
+            virtual void*       Comp() const                                  = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -1165,7 +1194,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -1174,12 +1203,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -1200,7 +1232,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -1209,17 +1241,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -1251,14 +1285,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback6(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback6(R (*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -1273,7 +1307,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -1283,7 +1317,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -1333,8 +1367,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -1342,8 +1375,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -1351,10 +1383,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5) = 0;
-            virtual bool  operator==(const Base& rhs) const                    = 0;
-            virtual bool  operator<(const Base& rhs) const                     = 0;
-            virtual void* Comp() const                                         = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5) = 0;
+            virtual bool        operator==(const Base& rhs) const                    = 0;
+            virtual bool        operator<(const Base& rhs) const                     = 0;
+            virtual void const* FreeFunction() const                                 = 0;
+            virtual void const* MethodFunction() const                               = 0;
+            virtual void*       Comp() const                                         = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -1369,7 +1403,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -1378,12 +1412,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -1404,7 +1441,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -1413,17 +1450,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -1455,14 +1494,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback7(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback7(R (*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -1477,7 +1516,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -1487,7 +1526,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -1537,8 +1576,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5, t6);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -1546,8 +1584,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5, t6);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -1555,10 +1592,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6) = 0;
-            virtual bool  operator==(const Base& rhs) const                           = 0;
-            virtual bool  operator<(const Base& rhs) const                            = 0;
-            virtual void* Comp() const                                                = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6) = 0;
+            virtual bool        operator==(const Base& rhs) const                           = 0;
+            virtual bool        operator<(const Base& rhs) const                            = 0;
+            virtual void const* FreeFunction() const                                        = 0;
+            virtual void const* MethodFunction() const                                      = 0;
+            virtual void*       Comp() const                                                = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -1573,7 +1612,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -1582,12 +1621,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -1608,7 +1650,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -1617,17 +1659,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -1659,14 +1703,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback8(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback8(R (*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -1681,7 +1725,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -1691,7 +1735,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -1741,8 +1785,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5, t6, t7);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -1750,8 +1793,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5, t6, t7);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -1759,10 +1801,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7) = 0;
-            virtual bool  operator==(const Base& rhs) const                                  = 0;
-            virtual bool  operator<(const Base& rhs) const                                   = 0;
-            virtual void* Comp() const                                                       = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7) = 0;
+            virtual bool        operator==(const Base& rhs) const                                  = 0;
+            virtual bool        operator<(const Base& rhs) const                                   = 0;
+            virtual void const* FreeFunction() const                                               = 0;
+            virtual void const* MethodFunction() const                                             = 0;
+            virtual void*       Comp() const                                                       = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -1777,7 +1821,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -1786,12 +1830,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -1812,7 +1859,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -1821,17 +1868,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 
@@ -1863,14 +1912,14 @@ namespace ncore
         ///\param function Member function address to call.
         template <typename C>
         Callback9(C* object, R (C::*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7, T8 t8))
-            : mCallback(new(&mMem) ChildMethod<C>(object, function))
+            : mCallback(new(new_signature(), &mMem) ChildMethod<C>(object, function))
         {
         }
 
         /// Constructs the callback to a free function or static member function.
         ///\param function Free function address to call.
         Callback9(R (*function)(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7, T8 t8))
-            : mCallback(new(&mMem) ChildFree(function))
+            : mCallback(new(new_signature(), &mMem) ChildFree(function))
         {
         }
 
@@ -1885,7 +1934,7 @@ namespace ncore
         {
             if (mCallback)
             {
-                memcpy(mMem, c.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, c.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
         }
@@ -1895,7 +1944,7 @@ namespace ncore
             mCallback = rhs.mCallback;
             if (mCallback)
             {
-                memcpy(mMem, rhs.mMem, sizeof(mMem));
+                __private__::copy_mem(mMem, rhs.mMem, (u32)sizeof(mMem));
                 mCallback = reinterpret_cast<Base*>(&mMem);
             }
 
@@ -1945,8 +1994,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5, t6, t7, t8);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
         /// Invokes the callback. This function can sometimes be more convenient than the operator(), which does the same thing.
@@ -1954,8 +2002,7 @@ namespace ncore
         {
             if (mCallback)
                 return (*mCallback)(t0, t1, t2, t3, t4, t5, t6, t7, t8);
-            else
-                throw std::runtime_error(unset_call_error);
+            return R();
         }
 
     private:
@@ -1963,10 +2010,12 @@ namespace ncore
         {
         public:
             Base() {}
-            virtual R     operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7, T8 t8) = 0;
-            virtual bool  operator==(const Base& rhs) const                                         = 0;
-            virtual bool  operator<(const Base& rhs) const                                          = 0;
-            virtual void* Comp() const                                                              = 0; // Returns a pointer used in comparisons.
+            virtual R           operator()(T0 t0, T1 t1, T2 t2, T3 t3, T4 t4, T5 t5, T6 t6, T7 t7, T8 t8) = 0;
+            virtual bool        operator==(const Base& rhs) const                                         = 0;
+            virtual bool        operator<(const Base& rhs) const                                          = 0;
+            virtual void const* FreeFunction() const                                                      = 0;
+            virtual void const* MethodFunction() const                                                    = 0;
+            virtual void*       Comp() const                                                              = 0; // Returns a pointer used in comparisons.
         };
 
         class ChildFree : public Base
@@ -1981,7 +2030,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return (mFunc == r->mFunc);
                 else
@@ -1990,12 +2039,15 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildFree* const r = dynamic_cast<const ChildFree*>(&rhs);
+                const ChildFree* const r = (const ChildFree*)rhs.FreeFunction();
                 if (r)
                     return mFunc < r->mFunc;
                 else
                     return true; // Free functions will always be less than methods (because comp returns 0).
             }
+
+            virtual void const* FreeFunction() const { return this; }
+            virtual void const* MethodFunction() const { return nullptr; }
 
             virtual void* Comp() const { return 0; }
 
@@ -2016,7 +2068,7 @@ namespace ncore
 
             virtual bool operator==(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                     return (mObj == r->mObj) && (mFunc == r->mFunc);
                 else
@@ -2025,17 +2077,19 @@ namespace ncore
 
             virtual bool operator<(const Base& rhs) const
             {
-                const ChildMethod<C>* const r = dynamic_cast<const ChildMethod<C>*>(&rhs);
+                const ChildMethod<C>* const r = (const ChildMethod<C>*)rhs.MethodFunction();
                 if (r)
                 {
                     if (mObj != r->mObj)
                         return mObj < r->mObj;
                     else
-                        return 0 > memcmp((void*)&mFunc, (void*)&(r->mFunc), sizeof(mFunc));
+                        return 0 > __private__::compare_mem((void const*)&mFunc, (void*)&(r->mFunc), (u32)sizeof(mFunc));
                 }
                 else
                     return mObj < rhs.Comp();
             }
+            virtual void const* FreeFunction() const { return nullptr; }
+            virtual void const* MethodFunction() const { return this; }
 
             virtual void* Comp() const { return mObj; }
 

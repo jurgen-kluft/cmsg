@@ -22,3 +22,51 @@
  * 3. This notice may not be removed or altered from any source
  * distribution.
  */
+
+#include "cmsg/c_delegate.h"
+
+struct Dog
+{
+    void Bark(int volume){};
+};
+
+struct Cat
+{
+    void Meow(int volume){};
+};
+
+Dog spot, rover; //We have two dogs
+Cat felix; //and one cat.
+
+//Define a normal function.
+void Func(int a){};
+
+
+static void DelegateTests()
+{
+   //Define a callback to a function returning void and taking
+    //one int parameter.
+    ncore::Callback1<void, int> speak;
+
+    //Point this callback at spot's Bark method.
+    speak.Reset(&spot, &Dog::Bark);
+    speak(50); //Spot barks loudly.
+
+    speak.Reset(&rover, &Dog::Bark);
+    speak(60); //Rovers lets out a mighty bark.
+
+    speak.Reset(&felix, &Cat::Meow);
+    speak(30); //Felix meows.
+
+    //Callbacks can be set to free functions.
+    speak = Func;
+
+    //Copy and assignment operators are well defined.
+    ncore::Callback1<void, int> copy = speak;
+    ASSERT(copy == speak);
+
+    //Callbacks can be set to null.
+    copy.Reset();
+    ASSERT(!copy.IsSet());
+
+}
