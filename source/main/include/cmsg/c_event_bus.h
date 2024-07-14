@@ -43,8 +43,9 @@ namespace ncore
             event_block_t* m_event_block_head;
 
             virtual void process_events();
-            virtual void fire_events(void const* event, u32 event_size, u32 event_count) = 0;
             virtual void teardown();
+
+            virtual void fire_events(void const* event, u32 event_size, u32 event_count) = 0;
         };
 
         template <typename T> class event_channel_typed_t : public event_channel_t

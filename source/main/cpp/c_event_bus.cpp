@@ -113,10 +113,12 @@ namespace ncore
             alloc->deallocate(bus);
         }
 
+        void set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel) { bus->m_channels[event_id] = channel; }
         void* get_event_channel(event_bus_t* bus, event_id_t event_id) { return bus->m_channels[event_id]; }
 
         void* alloc_heap_memory(event_bus_t* bus, u32 size) { return bus->m_heap_allocator->allocate(size); }
-
+        void* alloc_frame_memory(event_bus_t* bus, u32 size) { return bus->m_event_allocator->allocate(size); }
+        
         void* alloc_event_channel(event_bus_t* bus, event_id_t event_id, u32 size)
         {
             event_channel_t* channel  = (event_channel_t*)alloc_heap_memory(bus, size);
