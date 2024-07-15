@@ -44,8 +44,8 @@ namespace ncore
                 }
                 else
                 {
-                    block->m_next      = m_event_block_head;
-                    block->m_prev      = m_event_block_head;
+                    block->m_next      = block;
+                    block->m_prev      = block;
                     m_event_block_head = block;
                 }
             }
