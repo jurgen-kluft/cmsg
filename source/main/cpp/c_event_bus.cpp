@@ -86,8 +86,8 @@ namespace ncore
 
         struct event_bus_t
         {
-            alloc_t*         m_heap_allocator;
-            alloc_t*         m_event_allocator;
+            alloc_buffer_t*  m_heap_allocator;
+            alloc_buffer_t*  m_event_allocator;
             s32              m_channel_count;
             event_channel_t* m_channels[s_max_event_count];
         };
@@ -95,14 +95,25 @@ namespace ncore
         event_bus_t* create_event_bus(alloc_t* alloc)
         {
             event_bus_t* bus = (event_bus_t*)alloc->allocate(sizeof(event_bus_t));
+
+            bus->m_channel_count = 0;
             for (u32 i = 0; i < s_max_event_count; ++i)
                 bus->m_channels[i] = nullptr;
+
+            alloc_buffer_t* event_buffer = alloc->construct<alloc_buffer_t>();
+            event_buffer->init((byte*)alloc->allocate(8 * 1024 * 1024), 8 * 1024 * 1024);
+            bus->m_event_allocator = event_buffer;
+
+            alloc_buffer_t* heap_buffer = alloc->construct<alloc_buffer_t>();
+            heap_buffer->init((byte*)alloc->allocate(1 * 1024 * 1024), 1 * 1024 * 1024);
+            bus->m_heap_allocator = heap_buffer;
+
             return bus;
         }
 
         void destroy_event_bus(alloc_t* alloc, event_bus_t* bus)
         {
-            for (u32 i = 0; i < s_max_event_count; ++i)
+            for (u32 i = 0; i < bus->m_channel_count; ++i)
             {
                 if (bus->m_channels[i] != nullptr)
                 {
@@ -110,21 +121,33 @@ namespace ncore
                     alloc->deallocate(bus->m_channels[i]);
                 }
             }
+            alloc->deallocate(bus->m_heap_allocator->data());
+            alloc->deallocate(bus->m_event_allocator->data());
+            alloc->deallocate(bus->m_heap_allocator);
+            alloc->deallocate(bus->m_event_allocator);
             alloc->deallocate(bus);
         }
 
-        void set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel) { bus->m_channels[event_id] = channel; }
+        void set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel)
+        {
+            channel->m_heap_allocator   = bus->m_heap_allocator;
+            channel->m_event_allocator  = bus->m_event_allocator;
+            channel->m_event_block_head = nullptr;
+            bus->m_channels[event_id]   = channel;
+        }
         void* get_event_channel(event_bus_t* bus, event_id_t event_id) { return bus->m_channels[event_id]; }
 
         void* alloc_heap_memory(event_bus_t* bus, u32 size) { return bus->m_heap_allocator->allocate(size); }
         void* alloc_frame_memory(event_bus_t* bus, u32 size) { return bus->m_event_allocator->allocate(size); }
-        
+
         void* alloc_event_channel(event_bus_t* bus, event_id_t event_id, u32 size)
         {
-            event_channel_t* channel  = (event_channel_t*)alloc_heap_memory(bus, size);
-            bus->m_channels[event_id] = channel;
+            u8* mem = (u8*)alloc_heap_memory(bus, size);
+            for (u32 i = 0; i < size; ++i)
+                mem[i] = 0;
+            bus->m_channels[event_id] = (event_channel_t*)mem;;
             bus->m_channel_count      = (s32)event_id + 1;
-            return channel;
+            return mem;
         }
 
         void process_events(event_bus_t* bus)

@@ -62,7 +62,7 @@ namespace ncore
             void add_delegate(ncore::Callback1<void, T const&> delegate)
             {
                 void*            delegate_node_mem = alloc_heap((u32)sizeof(delegate_node_t));
-                delegate_node_t* node              = new (delegate_node_mem) delegate_node_t();
+                delegate_node_t* node              = new (new_signature(), delegate_node_mem) delegate_node_t();
                 node->m_delegate                   = delegate;
                 if (m_head == nullptr)
                 {
@@ -79,15 +79,19 @@ namespace ncore
                 }
             }
 
-            virtual void teardown()
+            virtual void teardown() override
             {
+                event_channel_t::teardown();
+                if (m_head == nullptr)
+                    return;
+
                 delegate_node_t* node = m_head;
-                while (node != nullptr)
+                do
                 {
                     delegate_node_t* next = node->m_next;
                     m_heap_allocator->deallocate(node);
                     node = next;
-                }
+                } while (node != m_head);
             }
 
             virtual void fire_events(void const* event, u32 event_size, u32 event_count) override
@@ -98,7 +102,7 @@ namespace ncore
                     u8 const* event_data = static_cast<u8 const*>(event);
                     for (u32 i = 0; i < event_count; ++i)
                     {
-                        node->m_delegate(*static_cast<T const*>(event_data));
+                        node->m_delegate(*(T const*)event_data);
                         event_data += event_size;
                     }
                     node = node->m_next;
@@ -118,17 +122,22 @@ namespace ncore
 
         // structs/classes used as messages need to be registered using nrtti so that we
         // can use the type_id_t (index) as the key for event registration.
-        template <typename T> void event_subscriber(event_bus_t* bus, ncore::Callback1<void, T const&> delegate)
+        template <typename T> void register_event_subscriber(event_bus_t* bus, ncore::Callback1<void, T const&> delegate)
         {
             event_id_t                id      = EventTypeInfo<T>::get_event_id();
             event_channel_typed_t<T>* channel = static_cast<event_channel_typed_t<T>*>(get_event_channel(bus, id));
             if (channel == nullptr)
             {
-                void* channel_mem = alloc_heap_memory(bus, sizeof(T));
+                void* channel_mem = alloc_heap_memory(bus, sizeof(event_channel_typed_t<T>));
                 channel           = new (new_signature(), channel_mem) event_channel_typed_t<T>();
                 set_event_channel(bus, id, channel);
             }
             channel->add_delegate(delegate);
+        }
+
+        template <typename T> void unregister_event_subscriber(event_bus_t* bus, ncore::Callback1<void, T const&> delegate)
+        {
+            // TODO
         }
 
         template <typename T> void post_event(event_bus_t* bus, T const& event)
@@ -138,7 +147,7 @@ namespace ncore
             if (channel != nullptr)
             {
                 void* event_mem = channel->alloc_event(sizeof(T));
-                new (event_mem) T(event);
+                new (new_signature(), event_mem) T(event);
             }
         }
 
