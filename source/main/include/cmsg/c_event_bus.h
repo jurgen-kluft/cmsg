@@ -96,8 +96,11 @@ namespace ncore
 
             virtual void fire_events(void const* event, u32 event_size, u32 event_count) override
             {
+                if (m_head == nullptr)
+                    return;
+
                 delegate_node_t const* node = m_head;
-                while (node != nullptr)
+                do
                 {
                     u8 const* event_data = static_cast<u8 const*>(event);
                     for (u32 i = 0; i < event_count; ++i)
@@ -106,7 +109,7 @@ namespace ncore
                         event_data += event_size;
                     }
                     node = node->m_next;
-                }
+                } while (node != m_head);
             }
         };
 
@@ -117,6 +120,7 @@ namespace ncore
         void         set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel);
         void*        get_event_channel(event_bus_t* bus, event_id_t event_id);
         void*        alloc_heap_memory(event_bus_t* bus, u32 size);
+        void         clear_memory(void* mem, u32 size);
         void*        alloc_frame_memory(event_bus_t* bus, u32 size);
         void         process_events(event_bus_t* bus);
 
@@ -128,8 +132,9 @@ namespace ncore
             event_channel_typed_t<T>* channel = static_cast<event_channel_typed_t<T>*>(get_event_channel(bus, id));
             if (channel == nullptr)
             {
-                void* channel_mem = alloc_heap_memory(bus, sizeof(event_channel_typed_t<T>));
-                channel           = new (new_signature(), channel_mem) event_channel_typed_t<T>();
+                void* channel_mem = alloc_heap_memory(bus, (u32)sizeof(event_channel_typed_t<T>));
+                clear_memory(channel_mem, (u32)sizeof(event_channel_typed_t<T>));
+                channel = new (new_signature(), channel_mem) event_channel_typed_t<T>();
                 set_event_channel(bus, id, channel);
             }
             channel->add_delegate(delegate);

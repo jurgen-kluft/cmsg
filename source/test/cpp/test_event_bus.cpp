@@ -51,14 +51,18 @@ UNITTEST_SUITE_BEGIN(event_bus)
         UNITTEST_FIXTURE_SETUP() {}
         UNITTEST_FIXTURE_TEARDOWN() {}
 
-
         struct TestEvent
         {
             int   a;
             float b;
         };
 
-        void ProcessEvent(TestEvent const& a) {}
+        static TestEvent sTestEvent;
+        void             ProcessEvent(TestEvent const& a)
+        {
+            sTestEvent.a += a.a;
+            sTestEvent.b += a.b;
+        }
 
         UNITTEST_TEST(subscribe)
         {
@@ -70,14 +74,27 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
             nevent::register_event_subscriber(bus, delegate);
 
+            sTestEvent.a = 0;
+            sTestEvent.b = 0.0f;
+
             TestEvent event;
             event.a = 1;
             event.b = 2.0f;
             nevent::post_event(bus, event);
 
+            process_events(bus);
+
+            CHECK_EQUAL(1, sTestEvent.a);
+            CHECK_EQUAL(2.0f, sTestEvent.b);
+
             event.a = 3;
             event.b = 4.0f;
             nevent::post_event(bus, event);
+
+            process_events(bus);
+
+            CHECK_EQUAL(1 + 3, sTestEvent.a);
+            CHECK_EQUAL(2.0f + 4.0f, sTestEvent.b);
 
             nevent::unregister_event_subscriber(bus, delegate);
             nevent::destroy_event_bus(Allocator, bus);
