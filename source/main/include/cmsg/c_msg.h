@@ -24,7 +24,7 @@ namespace ncore
         typedef u64   entity_t;
         typedef u64   component_t;
         typedef u32   msg_t;
-        typedef void* property_t;
+        typedef void* msg_struct_t;
         typedef void* value_t;
 
         template <typename T> struct array_t
@@ -93,15 +93,25 @@ namespace ncore
 
         struct typeinfo_t
         {
-            typeinfo_t(const char* type_name, const void* default_value, u32 sizeof_type)
+            inline typeinfo_t()
+                : m_type_name(nullptr)
+                , m_default_value(nullptr)
+                , m_sizeof(0)
+                , m_id(-1)
+            {
+            }
+            inline typeinfo_t(const char* type_name, const void* default_value, u32 sizeof_type)
                 : m_type_name(type_name)
                 , m_default_value(default_value)
                 , m_sizeof(sizeof_type)
+                , m_id(-1)
             {
             }
+
             const char* m_type_name;
             const void* m_default_value;
             u32         m_sizeof;
+            s32         m_id;
         };
 
         template <typename T> struct type_t
@@ -142,41 +152,37 @@ namespace ncore
         public:
             msg_system_t(id_system_t* id_system, alloc_t* alloc);
 
-            template <typename T> property_t register_property(id_t id, const T& default_value = type_t<T>::default_value);
-            template <typename T> property_t register_property(const char* name, const T& default_value = type_t<T>::default_value);
+            template <typename T> msg_struct_t register_struct(id_t id, const T& default_value = type_t<T>::default_value);
+            template <typename T> msg_struct_t register_struct(const char* name, const T& default_value = type_t<T>::default_value);
 
-            // message - property
-            template <typename T> void property_default_value(property_t property, T const*& outValue);
-            id_t                       idof_property(property_t property);
-            s32                        sizeof_property(property_t property);
-            const char*                nameof_property(property_t property);
+            // message - struct
+            template <typename T> void default_struct(msg_struct_t property, T const*& outValue);
+            id_t                       idof_struct(msg_struct_t property);
+            s32                        sizeof_struct(msg_struct_t property);
+            const char*                nameof_struct(msg_struct_t property);
 
             // ------------------------------------------------------------------------------------------------
             // message - begin/end, open/close
 
             // message - writing
-            msg_t                         begin(id_t id);
-            msg_t                         begin(const char* name);
-            template <typename T> value_t write_property(msg_t msg, property_t property, T const& value);
-            template <typename T> value_t write_property(msg_t msg, const char* property_name, T const& value);
-            void                          end(msg_t msg);
+            msg_t                      begin(id_t id);
+            msg_t                      begin(const char* name);
+            template <typename T> void write(msg_t msg, T const& value);
+            void                       end(msg_t msg);
 
             // message - reading
             void                       open(msg_t msg);
             s32                        num_properties(msg_t msg);
-            template <typename T> bool read_property(msg_t msg, property_t property, T const*& value);
-            value_t                    get_property(msg_t msg, property_t property);
-            template <typename T> bool is_property_typeof(msg_t msg, property_t property, const typeinfo_t* typeinfo = &type_t<T>::typeinfo);
+            template <typename T> bool read(msg_t msg, T const*& value);
+            template <typename T> bool has(msg_t msg);
             void                       close(msg_t msg);
 
             // message - posting
             void post(system_t system, msg_t msg);
             void post(entity_t entity, msg_t msg);
-            void post(entity_t entity, component_t component, msg_t msg);
 
             void post(const char* system, msg_t msg);
             void post(const char* system, const char* entity, msg_t msg);
-            void post(const char* system, const char* entity, const char* component, msg_t msg);
 
             id_system_t* m_id_system;
         };
@@ -190,8 +196,9 @@ namespace ncore
             virtual void on_register(entity_t entity)   = 0;
             virtual void on_unregister(entity_t entity) = 0;
 
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) = 0;
-            virtual void on_tick(f32 dt)                                           = 0;
+            virtual void on_msg(msg_t msg)                  = 0;
+            virtual void on_msg(entity_t entity, msg_t msg) = 0;
+            virtual void on_tick(f32 dt)                    = 0;
         };
 
         class ecs_t
@@ -201,8 +208,8 @@ namespace ncore
 
             // ------------------------------------------------------------------------------------------------
             // id's
-            
-            id_t        register_id(const char* name);
+
+            id_t register_id(const char* name);
 
             // ------------------------------------------------------------------------------------------------
             // system
@@ -247,8 +254,8 @@ namespace ncore
             template <typename T> bool get_component(entity_t entity, component_t component, T*& outValue);
             void                       remove_component(entity_t entity, component_t component);
 
-            msg_system_t msg;
-            ecs_data_t*  data;
+            msg_system_t* msg;
+            ecs_data_t*   data;
         };
     } // namespace nmsg
 } // namespace ncore

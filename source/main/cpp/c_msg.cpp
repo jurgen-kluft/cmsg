@@ -76,60 +76,6 @@ namespace ncore
         };
         SystemRender* gSystemRender = nullptr;
 
-        static void use_case()
-        {
-            alloc_t* allocator = context_t::system_alloc();
-
-            id_system_t id_system;
-            ecs_t       ecs(&id_system, 65536, 1024, 1024, allocator);
-            id_system_t ids;
-
-            system_t    ships_system = ecs.register_system(gSystemShips, "system/ships");
-            component_t ship_pos_cp  = ecs.register_component<f32x3>("position");
-            component_t ship_dir_cp  = ecs.register_component<f32x3>("direction");
-
-            entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
-            ecs.add_component<f32x3>(bug1, ship_pos_cp, f32x3::zero); // by id
-            ecs.add_component<f32x3>(bug1, ship_dir_cp, f32x3::up);   // by id
-            ecs.add_component<f32>(bug1, "speed", 10.0f);             // by name
-            ecs.add_component<f32>(bug1, "radius", 1.0f);             // by name
-
-            system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
-            system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
-            system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
-            system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
-
-            msg_system_t& msg = ecs.msg;
-
-            id_t explosion_msg_id = ids.register_id("msg/explosion");
-
-            property_t pos_prop    = msg.register_property<f32x3>("position", f32x3::zero);
-            property_t radius_prop = msg.register_property<float>("radius", 10.0f);
-
-            // what about composing a message using named (registered) properties?
-            f32x3 explosion_pos{100, 2, 5};
-
-            // position, radius, damage
-            msg_t explosion_msg = msg.begin(explosion_msg_id);
-            {
-                // properties by id
-                msg.write_property<f32x3>(explosion_msg, pos_prop, explosion_pos); // by id
-                msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);        // by id
-                msg.write_property<f32>(explosion_msg, "damage", 0.9f);            // by name
-            }
-            msg.end(explosion_msg);
-
-            // systems by name
-            msg.post("system/ships", explosion_msg);
-            msg.post("system/ships", "entity/bug1", explosion_msg);
-
-            // systems by id
-            msg.post(ships_system, explosion_msg);
-            msg.post(ai_system, explosion_msg);
-            msg.post(vfx_system, explosion_msg);
-            msg.post(sfx_system, explosion_msg);
-        }
-
         static s32 binary_search(const u32* array, u32 size, u32 value)
         {
             s32 low  = 0;
@@ -215,7 +161,7 @@ namespace ncore
         };
 
         ecs_t::ecs_t(id_system_t* id_system, u32 max_ids, u32 max_systems, u32 max_components, alloc_t* allocator)
-            : msg(id_system, allocator)
+            : msg(nullptr)
             , data(nullptr)
         {
         }
@@ -289,18 +235,77 @@ namespace ncore
         template <> const bool  type_t<bool>::default_value  = false;
         template <> const f32x3 type_t<f32x3>::default_value = f32x3::zero;
 
-        template<> typeinfo_t type_t<u8>::typeinfo("u8", &type_t<u8>::default_value, sizeof(u8));
-        template<> typeinfo_t type_t<u16>::typeinfo("u16", &type_t<u16>::default_value, sizeof(u16));
-        template<> typeinfo_t type_t<u32>::typeinfo("u32", &type_t<u32>::default_value, sizeof(u32));
-        template<> typeinfo_t type_t<u64>::typeinfo("u64", &type_t<u64>::default_value, sizeof(u64));
-        template<> typeinfo_t type_t<s8>::typeinfo("s8", &type_t<s8>::default_value, sizeof(s8));
-        template<> typeinfo_t type_t<s16>::typeinfo("s16", &type_t<s16>::default_value, sizeof(s16));
-        template<> typeinfo_t type_t<s32>::typeinfo("s32", &type_t<s32>::default_value, sizeof(s32));
-        template<> typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
-        template<> typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
-        template<> typeinfo_t type_t<f64>::typeinfo("f64", &type_t<f64>::default_value, sizeof(f64));
-        template<> typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
-        template<> typeinfo_t type_t<f32x3>::typeinfo("f32x3", &type_t<f32x3>::default_value, sizeof(f32x3));
+        template <> typeinfo_t type_t<u8>::typeinfo("u8", &type_t<u8>::default_value, (u32)sizeof(u8));
+        template <> typeinfo_t type_t<u16>::typeinfo("u16", &type_t<u16>::default_value, sizeof(u16));
+        template <> typeinfo_t type_t<u32>::typeinfo("u32", &type_t<u32>::default_value, sizeof(u32));
+        template <> typeinfo_t type_t<u64>::typeinfo("u64", &type_t<u64>::default_value, sizeof(u64));
+        template <> typeinfo_t type_t<s8>::typeinfo("s8", &type_t<s8>::default_value, sizeof(s8));
+        template <> typeinfo_t type_t<s16>::typeinfo("s16", &type_t<s16>::default_value, sizeof(s16));
+        template <> typeinfo_t type_t<s32>::typeinfo("s32", &type_t<s32>::default_value, sizeof(s32));
+        template <> typeinfo_t type_t<s64>::typeinfo("s64", &type_t<s64>::default_value, sizeof(s64));
+        template <> typeinfo_t type_t<f32>::typeinfo("f32", &type_t<f32>::default_value, sizeof(f32));
+        template <> typeinfo_t type_t<f64>::typeinfo("f64", &type_t<f64>::default_value, sizeof(f64));
+        template <> typeinfo_t type_t<bool>::typeinfo("bool", &type_t<bool>::default_value, sizeof(bool));
+        template <> typeinfo_t type_t<f32x3>::typeinfo("f32x3", &type_t<f32x3>::default_value, sizeof(f32x3));
+
+        // ------------------------------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------------------------------
+        // ------------------------------------------------------------------------------------------------------------------------
+
+        static void use_case()
+        {
+            alloc_t* allocator = context_t::system_alloc();
+
+            id_system_t id_system;
+            ecs_t       ecs(&id_system, 65536, 1024, 1024, allocator);
+            id_system_t ids;
+
+            system_t    ships_system = ecs.register_system(gSystemShips, "system/ships");
+            component_t ship_pos_cp  = ecs.register_component<f32x3>("position");
+            component_t ship_dir_cp  = ecs.register_component<f32x3>("direction");
+
+            entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
+            ecs.add_component<f32x3>(bug1, ship_pos_cp, f32x3::zero); // by id
+            ecs.add_component<f32x3>(bug1, ship_dir_cp, f32x3::up);   // by id
+            ecs.add_component<f32>(bug1, "speed", 10.0f);             // by name
+            ecs.add_component<f32>(bug1, "radius", 1.0f);             // by name
+
+            system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
+            system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
+            system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
+            system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
+
+            msg_system_t* msg = ecs.msg;
+
+            id_t explosion_msg_id = ids.register_id("msg/explosion");
+
+            msg_struct_t pos_prop    = msg->register_struct<f32x3>("position", f32x3::zero);
+            msg_struct_t radius_prop = msg->register_struct<float>("radius", 10.0f);
+
+            // what about composing a message using named (registered) properties?
+            f32x3 explosion_pos{100, 2, 5};
+
+            // position, radius, damage
+            msg_t explosion_msg = msg->begin(explosion_msg_id);
+            explosion_msg = msg->begin("msg/explosion"); // this will register the url first to get an id_t
+            {
+                msg->write<f32x3>(explosion_msg, explosion_pos); // by id
+                msg->write<f32>(explosion_msg, 10.0f);           // by id
+                msg->write<f32>(explosion_msg, 0.9f);            // by name
+            }
+            msg->end(explosion_msg);
+
+            // systems by name
+            msg->post("system/ships", explosion_msg);
+            msg->post("system/ships", "entity/bug1", explosion_msg);
+
+            // systems by id
+            msg->post(ships_system, explosion_msg);
+            msg->post(ai_system, explosion_msg);
+            msg->post(vfx_system, explosion_msg);
+            msg->post(sfx_system, explosion_msg);
+        }
 
     } // namespace nmsg
 } // namespace ncore
