@@ -5,7 +5,7 @@
 #    pragma once
 #endif
 
-#include "cmsg/c_delegate.h"
+#include "ccore/c_callback.h"
 
 namespace ncore
 {
@@ -13,94 +13,122 @@ namespace ncore
 
     namespace nevent
     {
-        static const u32 s_max_event_count = 1024;
-
         typedef s32 event_id_t;
-        static s32  s_generate_event_id()
-        {
-            static s32 s_event_id;
-            return ++s_event_id;
-        }
 
-        template <typename T> struct EventTypeInfo
-        {
-            static event_id_t get_event_id()
-            {
-                static const s32 s_event_id = s_generate_event_id();
-                return (event_id_t)s_event_id;
-            };
-        };
+        struct event_bus_t;
 
-        struct event_block_t;
+        event_bus_t* create_event_bus(alloc_t* alloc, s32 max_channels, u32 event_memory_size, u32 heap_memory_size);
+        void         destroy_event_bus(alloc_t* alloc, event_bus_t* bus);
+        void         process_events(event_bus_t* bus);
 
-        class event_channel_t
+        struct event_channel_t;
+        void             set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel);
+        event_channel_t* get_event_channel(event_bus_t* bus, event_id_t event_id);
+
+        struct event_channel_t
         {
         public:
-            virtual void*  alloc_event(u32 size);
-            virtual void*  alloc_heap(u32 size);
-            alloc_t*       m_heap_allocator;
-            alloc_t*       m_event_allocator;
-            event_block_t* m_event_block_head;
+            void* alloc_event(u32 size);
+            void* alloc_heap(u32 size);
+            void  dealloc_heap(void* ptr);
+            void  process_events();
+            void  setup(event_bus_t* bus) { v_setup(bus); }
+            void  teardown() { v_teardown(); }
+            void  fire_events(void const* event, u32 event_size, u32 event_count) { v_fire_events(event, event_size, event_count); }
 
-            virtual void process_events();
-            virtual void teardown();
+        protected:
+            virtual void v_setup(event_bus_t* bus)                                         = 0;
+            virtual void v_teardown()                                                      = 0;
+            virtual void v_fire_events(void const* event, u32 event_size, u32 event_count) = 0;
 
-            virtual void fire_events(void const* event, u32 event_size, u32 event_count) = 0;
+            event_bus_t* m_bus;
+            event_box_t* m_events;
         };
 
         template <typename T> class event_channel_typed_t : public event_channel_t
         {
         public:
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+
             struct delegate_node_t
             {
-                ncore::Callback1<void, T const&> m_delegate;
-                delegate_node_t*                 m_next;
-                delegate_node_t*                 m_prev;
-            };
-            delegate_node_t* m_head{nullptr};
+                DCORE_CLASS_PLACEMENT_NEW_DELETE
 
-            void add_delegate(ncore::Callback1<void, T const&> delegate)
+                ncore::callback_t<void, T const&> m_delegate;
+                delegate_node_t*                  m_next;
+                delegate_node_t*                  m_prev;
+            };
+            delegate_node_t* m_head;
+
+            void add_delegate(ncore::callback_t<void, T const&>& delegate)
             {
-                void*            delegate_node_mem = alloc_heap((u32)sizeof(delegate_node_t));
-                delegate_node_t* node              = new (new_signature(), delegate_node_mem) delegate_node_t();
-                node->m_delegate                   = delegate;
-                if (m_head == nullptr)
+                // Check for duplicates
+                delegate_node_t* node = m_head;
+                while (node != nullptr)
                 {
-                    m_head       = node;
-                    node->m_next = node;
-                    node->m_prev = node;
-                }
-                else
-                {
-                    node->m_next           = m_head;
-                    node->m_prev           = m_head->m_prev;
-                    m_head->m_prev->m_next = node;
-                    m_head->m_prev         = node;
-                }
+                    if (node->m_delegate == delegate)
+                        return true;
+                    node = node->m_next;
+                };
+
+                // Add delegate (unique)
+                void* delegate_node_mem = alloc_heap((u32)sizeof(delegate_node_t));
+                node                    = new (delegate_node_mem) delegate_node_t();
+                node->m_delegate        = delegate;
+                node->m_prev            = nullptr;
+                node->m_next            = m_head;
+                if (m_head != nullptr)
+                    m_head->m_prev = node;
+                m_head = node;
             }
 
-            virtual void teardown() override
+            bool remove_delegate(ncore::callback_t<void, T const&> delegate)
+            {
+                delegate_node_t* node = m_head;
+                while (node != nullptr)
+                {
+                    if (node->m_delegate == delegate)
+                    {
+                        if (node->m_prev != nullptr)
+                            node->m_prev->m_next = node->m_next;
+                        if (node->m_next != nullptr)
+                            node->m_next->m_prev = node->m_prev;
+                        if (m_head == node)
+                            m_head = node->m_next;
+                        dealloc_heap(node);
+                        return true;
+                    }
+                    node = node->m_next;
+                };
+                return false;
+            }
+
+        protected:
+            virtual void v_setup(bus_t* bus) override
+            {
+                m_bus  = bus;
+                m_head = nullptr;
+            }
+
+            virtual void v_teardown() override
             {
                 event_channel_t::teardown();
                 if (m_head == nullptr)
                     return;
 
                 delegate_node_t* node = m_head;
-                do
+                while (node != nullptr)
                 {
-                    delegate_node_t* next = node->m_next;
-                    m_heap_allocator->deallocate(node);
-                    node = next;
-                } while (node != m_head);
+                    m_head = node->m_next;
+                    dealloc_heap(node);
+                    node = m_head;
+                };
             }
 
-            virtual void fire_events(void const* event, u32 event_size, u32 event_count) override
+            virtual void v_fire_events(void const* event, u32 event_size, u32 event_count) override
             {
-                if (m_head == nullptr)
-                    return;
-
                 delegate_node_t const* node = m_head;
-                do
+                while (node != nullptr)
                 {
                     u8 const* event_data = static_cast<u8 const*>(event);
                     for (u32 i = 0; i < event_count; ++i)
@@ -109,50 +137,49 @@ namespace ncore
                         event_data += event_size;
                     }
                     node = node->m_next;
-                } while (node != m_head);
+                };
             }
         };
 
-        struct event_bus_t;
+        s32 new_global_event_id(event_bus_t* bus);
 
-        event_bus_t* create_event_bus(alloc_t* alloc);
-        void         destroy_event_bus(alloc_t* alloc, event_bus_t* bus);
-        void         set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel);
-        void*        get_event_channel(event_bus_t* bus, event_id_t event_id);
-        void*        alloc_heap_memory(event_bus_t* bus, u32 size);
-        void         clear_memory(void* mem, u32 size);
-        void*        alloc_frame_memory(event_bus_t* bus, u32 size);
-        void         process_events(event_bus_t* bus);
-
-        // structs/classes used as messages need to be registered using nrtti so that we
-        // can use the type_id_t (index) as the key for event registration.
-        template <typename T> void register_event_subscriber(event_bus_t* bus, ncore::Callback1<void, T const&> delegate)
+        // POD structs used as messages need to have a static member variable s_event_id initialized to -1
+        template <typename T> void register_event_subscriber(event_bus_t* bus, ncore::callback_t<void, T const&> delegate)
         {
-            event_id_t                id      = EventTypeInfo<T>::get_event_id();
-            event_channel_typed_t<T>* channel = static_cast<event_channel_typed_t<T>*>(get_event_channel(bus, id));
+            if (T::s_event_id < 0)
+                T::s_event_id = new_global_event_id(bus);
+
+            event_channel_t* channel = get_event_channel(bus, T::s_event_id);
             if (channel == nullptr)
             {
                 void* channel_mem = alloc_heap_memory(bus, (u32)sizeof(event_channel_typed_t<T>));
                 clear_memory(channel_mem, (u32)sizeof(event_channel_typed_t<T>));
-                channel = new (new_signature(), channel_mem) event_channel_typed_t<T>();
+                channel = new (channel_mem) event_channel_typed_t<T>();
                 set_event_channel(bus, id, channel);
             }
             channel->add_delegate(delegate);
         }
 
-        template <typename T> void unregister_event_subscriber(event_bus_t* bus, ncore::Callback1<void, T const&> delegate)
+        template <typename T> void unregister_event_subscriber(event_bus_t* bus, ncore::callback_t<void, T const&> delegate)
         {
-            // TODO
+            if (T::s_event_id < 0)
+                return; // Event type not registered
+
+            event_channel_t* channel = get_event_channel(bus, T::s_event_id);
+            if (channel == nullptr)
+                return;
+            event_channel_typed_t<T>* typed_channel = static_cast<event_channel_typed_t<T>*>(channel);
+            typed_channel->remove_delegate(delegate);
         }
 
         template <typename T> void post_event(event_bus_t* bus, T const& event)
         {
-            event_id_t       id      = EventTypeInfo<T>::get_event_id();
+            const event_id_t id      = T::s_event_id;
             event_channel_t* channel = static_cast<event_channel_t*>(get_event_channel(bus, id));
             if (channel != nullptr)
             {
                 void* event_mem = channel->alloc_event(sizeof(T));
-                new (new_signature(), event_mem) T(event);
+                new (event_mem) T(event);
             }
         }
 
