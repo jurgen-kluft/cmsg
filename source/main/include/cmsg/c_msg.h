@@ -148,6 +148,8 @@ namespace ncore
         // message
         class msg_system_t
         {
+            id_system_t* m_id_system;
+
         public:
             msg_system_t(id_system_t* id_system, alloc_t* alloc);
 
@@ -155,20 +157,21 @@ namespace ncore
             template <typename T> property_t register_property(const char* name, const T& default_value = type_t<T>::default_value);
 
             // message - struct or system type
-            template <typename T> void default_propert(property_t property, T const*& outValue);
+            template <typename T> void default_property(property_t property, T const*& outValue);
             id_t                       idof_property(property_t property);
             s32                        sizeof_property(property_t property);
             const char*                nameof_property(property_t property);
 
             // ------------------------------------------------------------------------------------------------
-            // message - begin/end, open/close
+            // message
 
             // --------- message - writing ---------
             msg_t begin(id_t id);
             msg_t begin(const char* name);
 
             // You can write many properties as part of a message, they have to be registered though.
-            template <typename T> void write(msg_t msg, T const& value);
+            template <typename T> void write(msg_t msg, property_t pid, T const& value);
+            template <typename T> void write(msg_t msg, const char* pname, T const& value);
 
             void end(msg_t msg);
 
@@ -178,18 +181,17 @@ namespace ncore
             // A message can have many properties, this function will return false when the requested property type
             // is not part of the message. You will get back a pointer to the type, you will have to do something
             // with that data before you call close(msg).
-            template <typename T> bool view(msg_t msg, T const*& value);
+            template <typename T> bool view(msg_t msg, property_t pid, T const*& value);
+            template <typename T> bool view(msg_t msg, const char* pname, T const*& value);
 
             void close(msg_t msg);
 
-            // message - posting
+            // --------- message - posting ---------
             void post(system_t system, msg_t msg);
             void post(entity_t entity, msg_t msg);
 
             void post(const char* system, msg_t msg);
             void post(const char* system, const char* entity, msg_t msg);
-
-            id_system_t* m_id_system;
         };
 
         struct ecs_data_t;

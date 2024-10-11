@@ -12,6 +12,15 @@ namespace ncore
 {
     namespace nmsg
     {
+        //
+        // .______   .______        ______   .___________.  ______   .___________.____    ____ .______    _______
+        // |   _  \  |   _  \      /  __  \  |           | /  __  \  |           |\   \  /   / |   _  \  |   ____|
+        // |  |_)  | |  |_)  |    |  |  |  | `---|  |----`|  |  |  | `---|  |----` \   \/   /  |  |_)  | |  |__
+        // |   ___/  |      /     |  |  |  |     |  |     |  |  |  |     |  |       \_    _/   |   ___/  |   __|
+        // |  |      |  |\  \----.|  `--'  |     |  |     |  `--'  |     |  |         |  |     |  |      |  |____
+        // | _|      | _| `._____| \______/      |__|      \______/      |__|         |__|     | _|      |_______|
+        //
+
         // The whole idea of entity / component / system is to be able to
         // send messages to a specific entity or a specific component
         // or a specific system
@@ -76,27 +85,6 @@ namespace ncore
         };
         SystemRender* gSystemRender = nullptr;
 
-        static s32 binary_search(const u32* array, u32 size, u32 value)
-        {
-            s32 low  = 0;
-            s32 high = size - 1;
-
-            while (low <= high)
-            {
-                s32 mid       = (low + high) / 2;
-                u32 mid_value = array[mid];
-
-                if (mid_value < value)
-                    low = mid + 1;
-                else if (mid_value > value)
-                    high = mid - 1;
-                else
-                    return mid;
-            }
-
-            return low; // return the index where the value should be inserted
-        }
-
         //          name registration (ASCII only)
         // NOTE:
         // do we really have to store the strings ourselves or could we just
@@ -114,7 +102,7 @@ namespace ncore
                 m_name_str_array.initialize(allocator, max_names * 32);
             }
 
-            static u32 generate_hash(const char* name)
+            static u64 s_generate_hash(const char* name)
             {
                 u64 const seed  = 0;
                 u64 const prime = 0x9E3779B185EBCA87ULL;
@@ -124,15 +112,36 @@ namespace ncore
                     hash ^= *name++;
                     hash *= prime;
                 }
-                return (u32)hash;
+                return hash;
             }
 
-            u32 register_name(const char* name)
+            static s32 s_binary_search(const u32* array, u32 size, u64 hash)
             {
-                u32 const hash = generate_hash(name);
+                s32 low  = 0;
+                s32 high = size - 1;
+
+                while (low <= high)
+                {
+                    s32 mid       = (low + high) / 2;
+                    u32 mid_value = array[mid];
+
+                    if (mid_value < hash)
+                        low = mid + 1;
+                    else if (mid_value > hash)
+                        high = mid - 1;
+                    else
+                        return mid;
+                }
+
+                return low; // return the index where the value should be inserted
+            }
+
+            s64 register_name(const char* name)
+            {
+                u64 const hash = s_generate_hash(name);
 
                 // find the name in the hash array which is sorted by hash
-                const s32 index = binary_search(m_name_hash_array.m_data, m_name_hash_array.m_size, hash);
+                const s32 index = s_binary_search(m_name_hash_array.m_data, m_name_hash_array.m_size, hash);
 
                 // if the name is already registered return the id
                 if (index < m_name_hash_array.m_size && m_name_hash_array.m_data[index] == hash)
@@ -141,7 +150,7 @@ namespace ncore
                     return m_name_offset_array.m_data[index];
                 }
 
-                // we assume that we do not have hash collisions, so a hash is unique
+                // NOTE: we assume that we do not have hash collisions, so a hash is unique
 
                 // if the name is not registered, insert it in the hash array
                 // make space for the new name in the hash and offset array
@@ -172,7 +181,7 @@ namespace ncore
 
         struct name_data_t
         {
-            u32 m_hash;   // hash of the name (name hash array)
+            u64 m_hash;   // hash of the name (name hash array)
             u32 m_offset; // offset of the name (name str array)
             u32 m_index;  // index into the object array (component, system, ...)
         };
@@ -278,17 +287,18 @@ namespace ncore
 
             property_t pos_prop    = msg->register_property<f32x3>("position", f32x3::zero);
             property_t radius_prop = msg->register_property<float>("radius", 10.0f);
+            property_t damage_prop = msg->register_property<float>("damage", 0.0f);
 
             // what about composing a message using named (registered) properties?
             f32x3 explosion_pos{100, 2, 5};
 
             // position, radius, damage
             msg_t explosion_msg = msg->begin(explosion_msg_id);
-            explosion_msg       = msg->begin("msg/explosion"); // this will register the url first to get an id_t
+            explosion_msg       = msg->begin("msg/explosion"); // by name
             {
-                msg->write<f32x3>(explosion_msg, explosion_pos); // by id
-                msg->write<f32>(explosion_msg, 10.0f);           // by id
-                msg->write<f32>(explosion_msg, 0.9f);            // by name
+                msg->write<f32x3>(explosion_msg, pos_prop, explosion_pos); // by property_t
+                msg->write<f32>(explosion_msg, radius_prop, 10.0f);        // by property_t
+                msg->write<f32>(explosion_msg, "damage", 0.9f);            // by name (slower, since it needs to hash the name and do lookups to find property_t)
             }
             msg->end(explosion_msg);
 
