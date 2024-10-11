@@ -16,10 +16,9 @@ namespace ncore
 
         struct event_bus_t;
 
-        void* alloc_heap_memory(event_bus_t* bus, u32 size);
+//        void* alloc_heap_memory(event_bus_t* bus, u32 size);
         void* alloc_frame_memory(event_bus_t* bus, u32 size);
-        void  clear_memory(void* mem, u32 size);
-        void  process_events(event_bus_t* bus);
+  //      void  clear_memory(void* mem, u32 size);
 
         struct event_box_t
         {
@@ -35,6 +34,16 @@ namespace ncore
                 u16 const i = m_count++;
                 return base() + (i * m_size);
             }
+        };
+
+        struct event_bus_t
+        {
+            alloc_buffer_t*   m_heap_allocator;
+            alloc_buffer_t*   m_event_allocator;
+            s32               m_channel_count;
+            s32               m_channel_max;
+            event_channel_t** m_channels;
+            s32               m_global_event_id;
         };
 
         void* event_channel_t::alloc_event(u32 size)
@@ -67,16 +76,6 @@ namespace ncore
 
             m_events = nullptr;
         }
-
-        struct event_bus_t
-        {
-            alloc_buffer_t*   m_heap_allocator;
-            alloc_buffer_t*   m_event_allocator;
-            s32               m_channel_count;
-            s32               m_channel_max;
-            event_channel_t** m_channels;
-            s32               m_global_event_id;
-        };
 
         s32 new_global_event_id(event_bus_t* bus) { return bus->m_global_event_id++; }
 

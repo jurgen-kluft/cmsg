@@ -191,8 +191,7 @@ namespace ncore
             array_t<u16>   m_component_remap; // set to ecs 'max' components
             array_t<void*> m_component_data;  // set to ecs-system 'max' components
 
-            hbb_data_t   m_entity_used;             // set to ecs-system 'max' entities
-            hbb_hdr_t    m_entity_cp_used_hbb_hdr;  // hbb hdr for used components
+            binmap_t     m_entity_used;             // set to ecs-system 'max' entities
             array_t<u32> m_entity_cp_used_hbb_data; // entity, hbb data per entity to indicate which component is used
         };
 
@@ -204,21 +203,18 @@ namespace ncore
 
             // when registering a component by name, the name is hashed and the hash is used to find the component
             // but then when we insert (sorted) it into the component array, we need to know the index of the component
-            hbb_hdr_t                 m_component_free_hbb_hdr;
-            hbb_data_t                m_component_free_hbb_data;
+            binmap_t                  m_component_free_hbb_data;
             array_t<name_data_t>      m_component_names; // (sorted by hash) capacity = max-components
             array_t<component_data_t> m_component_array; // capacity = max-components
 
             // when registering a system by name (or getting by name), the name is hashed and the hash is used to find the system
             // but then when we insert (sorted) it into the system array, we need to know the index of the component
-            hbb_hdr_t              m_system_free_hbb_hdr;
-            hbb_data_t             m_system_free_hbb_data;
+            binmap_t               m_system_free_hbb_data;
             array_t<name_data_t>   m_system_names; // (sorted by hash) capacity = max-components
             array_t<system_data_t> m_system_array; // capacity = max-components
         };
 
         id_t        id_system_t::register_id(const char* name) { return id_t{0}; }
-        void        id_system_t::unregister_id(id_t id) {}
         const char* id_system_t::nameof_id(id_t system) const { return ""; }
 
         // the defaults of the above types are:
@@ -280,15 +276,15 @@ namespace ncore
 
             id_t explosion_msg_id = ids.register_id("msg/explosion");
 
-            msg_struct_t pos_prop    = msg->register_struct<f32x3>("position", f32x3::zero);
-            msg_struct_t radius_prop = msg->register_struct<float>("radius", 10.0f);
+            property_t pos_prop    = msg->register_property<f32x3>("position", f32x3::zero);
+            property_t radius_prop = msg->register_property<float>("radius", 10.0f);
 
             // what about composing a message using named (registered) properties?
             f32x3 explosion_pos{100, 2, 5};
 
             // position, radius, damage
             msg_t explosion_msg = msg->begin(explosion_msg_id);
-            explosion_msg = msg->begin("msg/explosion"); // this will register the url first to get an id_t
+            explosion_msg       = msg->begin("msg/explosion"); // this will register the url first to get an id_t
             {
                 msg->write<f32x3>(explosion_msg, explosion_pos); // by id
                 msg->write<f32>(explosion_msg, 10.0f);           // by id

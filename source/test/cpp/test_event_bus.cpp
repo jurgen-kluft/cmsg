@@ -1,8 +1,8 @@
 #include "ccore/c_target.h"
+#include "ccore/c_allocator.h"
 #include "cbase/c_context.h"
 #include "cbase/c_hbb.h"
 #include "cmsg/c_event_bus.h"
-#include "cmsg/test_allocator.h"
 
 #include "cunittest/cunittest.h"
 
@@ -19,23 +19,27 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         UNITTEST_TEST(create_destroy_bus)
         {
-            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator);
+            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator, 1024, 8*1024*1024, 1*1024*1024);
             CHECK_NOT_NULL(bus);
             nevent::destroy_event_bus(Allocator, bus);
         }
 
         struct TestEvent
         {
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+            static s32 s_event_id;
+
             int   a;
             float b;
         };
+        s32 TestEvent::s_event_id = -1;
 
         UNITTEST_TEST(create_destroy_bus_and_event_channel)
         {
-            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator);
+            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator, 1024, 8*1024*1024, 1*1024*1024);
             CHECK_NOT_NULL(bus);
 
-            ncore::Callback1<void, TestEvent const&> delegate;
+            ncore::callback_t<void, TestEvent const&> delegate;
             nevent::register_event_subscriber(bus, delegate);
 
             // ...
@@ -54,9 +58,13 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         struct TestEvent
         {
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+            static s32 s_event_id;
+
             int   a;
             float b;
         };
+        s32 TestEvent::s_event_id = -1;
 
         static TestEvent sTestEvent;
         void             ProcessEvent(TestEvent const& a)
@@ -67,10 +75,10 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         UNITTEST_TEST(subscribe_single_event)
         {
-            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator);
+            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator, 1024, 8*1024*1024, 1*1024*1024);
             CHECK_NOT_NULL(bus);
 
-            ncore::Callback1<void, TestEvent const&> delegate;
+            ncore::callback_t<void, TestEvent const&> delegate;
             delegate = ProcessEvent;
 
             nevent::register_event_subscriber(bus, delegate);
@@ -103,10 +111,10 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         UNITTEST_TEST(subscribe_multiple_events)
         {
-            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator);
+            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator, 1024, 8*1024*1024, 1*1024*1024);
             CHECK_NOT_NULL(bus);
 
-            ncore::Callback1<void, TestEvent const&> delegate;
+            ncore::callback_t<void, TestEvent const&> delegate;
             delegate = ProcessEvent;
 
             nevent::register_event_subscriber(bus, delegate);
@@ -142,9 +150,14 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         struct TestEventOne
         {
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+            static s32 s_event_id;
+
             int   a;
             float b;
         };
+        s32 TestEventOne::s_event_id = -1;
+
         static TestEventOne sTestEventOne;
         void             ProcessEventOne(TestEventOne const& a)
         {
@@ -154,10 +167,15 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         struct TestEventTwo
         {
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+            static s32 s_event_id;
+
             int   a;
             float b;
             double c;
         };
+        s32 TestEventTwo::s_event_id = -1;
+
         static TestEventTwo sTestEventTwo;
         void             ProcessEventTwo(TestEventTwo const& a)
         {
@@ -168,14 +186,14 @@ UNITTEST_SUITE_BEGIN(event_bus)
 
         UNITTEST_TEST(subscribe_single_event)
         {
-            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator);
+            nevent::event_bus_t* bus = nevent::create_event_bus(Allocator, 1024, 8*1024*1024, 1*1024*1024);
             CHECK_NOT_NULL(bus);
 
-            ncore::Callback1<void, TestEventOne const&> delegateOne;
+            ncore::callback_t<void, TestEventOne const&> delegateOne;
             delegateOne = ProcessEventOne;
             nevent::register_event_subscriber(bus, delegateOne);
 
-            ncore::Callback1<void, TestEventTwo const&> delegateTwo;
+            ncore::callback_t<void, TestEventTwo const&> delegateTwo;
             delegateTwo = ProcessEventTwo;
             nevent::register_event_subscriber(bus, delegateTwo);
 
@@ -190,7 +208,7 @@ UNITTEST_SUITE_BEGIN(event_bus)
             eventOne.a = 1;
             eventOne.b = 2.0f;
             nevent::post_event(bus, eventOne);
-            
+
             TestEventTwo eventTwo;
             eventTwo.a = 1;
             eventTwo.b = 2.0f;

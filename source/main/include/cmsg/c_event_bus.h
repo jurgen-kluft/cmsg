@@ -16,10 +16,15 @@ namespace ncore
         typedef s32 event_id_t;
 
         struct event_bus_t;
+        struct event_box_t;
 
         event_bus_t* create_event_bus(alloc_t* alloc, s32 max_channels, u32 event_memory_size, u32 heap_memory_size);
         void         destroy_event_bus(alloc_t* alloc, event_bus_t* bus);
         void         process_events(event_bus_t* bus);
+
+        void* alloc_heap_memory(event_bus_t* bus, u32 size);
+//        void* alloc_frame_memory(event_bus_t* bus, u32 size);
+        void  clear_memory(void* mem, u32 size);
 
         struct event_channel_t;
         void             set_event_channel(event_bus_t* bus, event_id_t event_id, event_channel_t* channel);
@@ -60,14 +65,14 @@ namespace ncore
             };
             delegate_node_t* m_head;
 
-            void add_delegate(ncore::callback_t<void, T const&>& delegate)
+            bool add_delegate(ncore::callback_t<void, T const&>& delegate)
             {
                 // Check for duplicates
                 delegate_node_t* node = m_head;
                 while (node != nullptr)
                 {
                     if (node->m_delegate == delegate)
-                        return true;
+                        return false;
                     node = node->m_next;
                 };
 
@@ -80,6 +85,7 @@ namespace ncore
                 if (m_head != nullptr)
                     m_head->m_prev = node;
                 m_head = node;
+                return true;
             }
 
             bool remove_delegate(ncore::callback_t<void, T const&> delegate)
@@ -104,7 +110,7 @@ namespace ncore
             }
 
         protected:
-            virtual void v_setup(bus_t* bus) override
+            virtual void v_setup(event_bus_t* bus) override
             {
                 m_bus  = bus;
                 m_head = nullptr;
@@ -155,9 +161,10 @@ namespace ncore
                 void* channel_mem = alloc_heap_memory(bus, (u32)sizeof(event_channel_typed_t<T>));
                 clear_memory(channel_mem, (u32)sizeof(event_channel_typed_t<T>));
                 channel = new (channel_mem) event_channel_typed_t<T>();
-                set_event_channel(bus, id, channel);
+                set_event_channel(bus, T::s_event_id, channel);
             }
-            channel->add_delegate(delegate);
+            event_channel_typed_t<T>* typed_channel = static_cast<event_channel_typed_t<T>*>(channel);
+            typed_channel->add_delegate(delegate);
         }
 
         template <typename T> void unregister_event_subscriber(event_bus_t* bus, ncore::callback_t<void, T const&> delegate)

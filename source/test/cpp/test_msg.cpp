@@ -8,12 +8,11 @@
 namespace ncore
 {
     using namespace nmsg;
-    
+
     class SystemShips : public ecs_system_t
     {
         // NOTE: One bit per entity, this array holds the globally maximum number of entities
-        hbb_data_t* ent_hbb;
-        hbb_hdr_t   ent_hbb_hdr;
+        binmap_t ent_hbb;
 
         struct queued_msg_t
         {
@@ -56,7 +55,7 @@ namespace ncore
             // process these actions:
             // - move + collision (all entities)
             // - aim (all entities)
-            
+
         }
     };
     SystemShips* gSystemShips = nullptr;
@@ -64,12 +63,12 @@ namespace ncore
     class SystemAI : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) 
+        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
         {
             // handle the message
         }
 
-        virtual void on_tick(f32 dt) 
+        virtual void on_tick(f32 dt)
         {
             // compute/determine the direction and speed of each entity
 
@@ -80,12 +79,12 @@ namespace ncore
     class SystemGfxVfx : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) 
+        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
         {
             // handle the message
         }
 
-        virtual void on_tick(f32 dt) 
+        virtual void on_tick(f32 dt)
         {
             // compute/determine the direction and speed of each entity
 
@@ -96,12 +95,12 @@ namespace ncore
     class SystemAudioSfx : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) 
+        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
         {
             // handle the message
         }
 
-        virtual void on_tick(f32 dt) 
+        virtual void on_tick(f32 dt)
         {
             // compute/determine the direction and speed of each entity
 
@@ -112,12 +111,12 @@ namespace ncore
     class SystemRender : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) 
+        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
         {
             // handle the message
         }
 
-        virtual void on_tick(f32 dt) 
+        virtual void on_tick(f32 dt)
         {
             // compute/determine the direction and speed of each entity
 
@@ -149,7 +148,7 @@ namespace ncore
         const system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
         const system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
 
-        msg_system_t& msg = ecs.msg;
+        msg_system_t& msg = *ecs.msg;
 
         const id_t explosion_msg_id = ecs.register_id("msg/explosion");
 
@@ -163,9 +162,12 @@ namespace ncore
         const msg_t explosion_msg = msg.begin(explosion_msg_id);
         {
             // properties by id
-            msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id
-            msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);            // by id
-            msg.write_property<f32>(explosion_msg, "damage", 0.9f);                // by name
+            //msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id
+            //msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);            // by id
+            //msg.write_property<f32>(explosion_msg, "damage", 0.9f);                // by name
+            msg.write(explosion_msg, explosion_pos);
+            msg.write(explosion_msg, radius_prop);
+            msg.write(explosion_msg, radius_prop);
         }
         msg.end(explosion_msg);
 
