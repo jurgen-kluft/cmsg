@@ -1,6 +1,6 @@
 #include "ccore/c_target.h"
 #include "cbase/c_context.h"
-#include "cbase/c_hbb.h"
+#include "cbase/c_binmap.h"
 #include "cmsg/c_msg.h"
 
 #include "cunittest/cunittest.h"
@@ -165,9 +165,9 @@ namespace ncore
             //msg.write_property<vector3_t>(explosion_msg, pos_prop, explosion_pos); // by id
             //msg.write_property<f32>(explosion_msg, radius_prop, 10.0f);            // by id
             //msg.write_property<f32>(explosion_msg, "damage", 0.9f);                // by name
-            msg.write(explosion_msg, explosion_pos);
-            msg.write(explosion_msg, radius_prop);
-            msg.write(explosion_msg, radius_prop);
+            //msg.write(explosion_msg, explosion_pos);
+            //msg.write(explosion_msg, radius_prop);
+            //msg.write(explosion_msg, radius_prop);
         }
         msg.end(explosion_msg);
 
