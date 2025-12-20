@@ -16,9 +16,9 @@ namespace ncore
 
         struct event_bus_t;
 
-//        void* alloc_heap_memory(event_bus_t* bus, u32 size);
+        //        void* alloc_heap_memory(event_bus_t* bus, u32 size);
         void* alloc_frame_memory(event_bus_t* bus, u32 size);
-  //      void  clear_memory(void* mem, u32 size);
+        //      void  clear_memory(void* mem, u32 size);
 
         struct event_box_t
         {
@@ -38,8 +38,8 @@ namespace ncore
 
         struct event_bus_t
         {
-            alloc_buffer_t*   m_heap_allocator;
-            alloc_buffer_t*   m_event_allocator;
+            alloc_t*          m_heap_allocator;
+            alloc_t*          m_event_allocator;
             s32               m_channel_count;
             s32               m_channel_max;
             event_channel_t** m_channels;
@@ -88,23 +88,23 @@ namespace ncore
             for (u32 i = 0; i < max_channels; ++i)
                 bus->m_channels[i] = nullptr;
 
-            alloc_buffer_t* event_buffer = alloc->construct<alloc_buffer_t>();
-            event_buffer->init((byte*)alloc->allocate(event_memory_size), event_memory_size);
-            bus->m_event_allocator = event_buffer;
+            // alloc_buffer_t* event_buffer = alloc->construct<alloc_buffer_t>();
+            // event_buffer->init((byte*)alloc->allocate(event_memory_size), event_memory_size);
+            bus->m_event_allocator = alloc;
 
-            alloc_buffer_t* heap_buffer = alloc->construct<alloc_buffer_t>();
-            heap_buffer->init((byte*)alloc->allocate(heap_memory_size), heap_memory_size);
-            bus->m_heap_allocator = heap_buffer;
+            // alloc_buffer_t* heap_buffer = alloc->construct<alloc_buffer_t>();
+            // heap_buffer->init((byte*)alloc->allocate(heap_memory_size), heap_memory_size);
+            bus->m_heap_allocator = alloc;
 
             return bus;
         }
 
         void destroy_event_bus(alloc_t* alloc, event_bus_t* bus)
         {
-            alloc->deallocate(bus->m_heap_allocator->data());
-            alloc->deallocate(bus->m_event_allocator->data());
-            alloc->deallocate(bus->m_heap_allocator);
-            alloc->deallocate(bus->m_event_allocator);
+            // alloc->deallocate(bus->m_heap_allocator->data());
+            // alloc->deallocate(bus->m_event_allocator->data());
+            // alloc->deallocate(bus->m_heap_allocator);
+            // alloc->deallocate(bus->m_event_allocator);
             alloc->deallocate(bus);
         }
 

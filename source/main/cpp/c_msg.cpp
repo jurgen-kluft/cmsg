@@ -1,9 +1,9 @@
 #include "ccore/c_allocator.h"
+#include "cbase/c_binmap.h"
 #include "ccore/c_debug.h"
 #include "cbase/c_context.h"
 #include "cbase/c_debug.h"
 #include "cbase/c_memory.h"
-#include "cbase/c_hbb.h"
 #include "cbase/c_runes.h"
 
 #include "cmsg/c_msg.h"
@@ -33,7 +33,8 @@ namespace ncore
         class SystemShips : public ecs_system_t
         {
         public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
+            virtual void on_msg(msg_t msg) {}
+            virtual void on_msg(entity_t entity, msg_t msg) {}
             virtual void on_tick(f32 dt) {}
 
             virtual void on_register(entity_t entity) {}
@@ -44,7 +45,8 @@ namespace ncore
         class SystemAI : public ecs_system_t
         {
         public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
+            virtual void on_msg(msg_t msg) {}
+            virtual void on_msg(entity_t entity, msg_t msg) {}
             virtual void on_tick(f32 dt) {}
 
             virtual void on_register(entity_t entity) {}
@@ -55,7 +57,8 @@ namespace ncore
         class SystemGfxVfx : public ecs_system_t
         {
         public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
+            virtual void on_msg(msg_t msg) {}
+            virtual void on_msg(entity_t entity, msg_t msg) {}
             virtual void on_tick(f32 dt) {}
 
             virtual void on_register(entity_t entity) {}
@@ -66,7 +69,8 @@ namespace ncore
         class SystemAudioSfx : public ecs_system_t
         {
         public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
+            virtual void on_msg(msg_t msg) {}
+            virtual void on_msg(entity_t entity, msg_t msg) {}
             virtual void on_tick(f32 dt) {}
 
             virtual void on_register(entity_t entity) {}
@@ -77,7 +81,8 @@ namespace ncore
         class SystemRender : public ecs_system_t
         {
         public:
-            virtual void on_msg(entity_t entity, component_t component, msg_t msg) {}
+            virtual void on_msg(msg_t msg) {}
+            virtual void on_msg(entity_t entity, msg_t msg) {}
             virtual void on_tick(f32 dt) {}
 
             virtual void on_register(entity_t entity) {}
@@ -260,7 +265,8 @@ namespace ncore
 
         static void use_case()
         {
-            alloc_t* allocator = context_t::system_alloc();
+            context_t ctx = g_current_context();
+            alloc_t* allocator = ctx.system_alloc();
 
             id_system_t id_system;
             ecs_t       ecs(&id_system, 65536, 1024, 1024, allocator);
@@ -279,7 +285,7 @@ namespace ncore
             system_t ai_system     = ecs.register_system(gSystemAI, "system/ai");
             system_t vfx_system    = ecs.register_system(gSystemGfxVfx, "system/gfx/vfx");
             system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
-            system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
+            //system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
 
             msg_system_t* msg = ecs.msg;
 
@@ -287,7 +293,7 @@ namespace ncore
 
             property_t pos_prop    = msg->register_property<f32x3>("position", f32x3::zero);
             property_t radius_prop = msg->register_property<float>("radius", 10.0f);
-            property_t damage_prop = msg->register_property<float>("damage", 0.0f);
+            //property_t damage_prop = msg->register_property<float>("damage", 0.0f);
 
             // what about composing a message using named (registered) properties?
             f32x3 explosion_pos{100, 2, 5};

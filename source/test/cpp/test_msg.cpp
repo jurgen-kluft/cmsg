@@ -12,12 +12,11 @@ namespace ncore
     class SystemShips : public ecs_system_t
     {
         // NOTE: One bit per entity, this array holds the globally maximum number of entities
-        binmap_t ent_hbb;
+        //binmap_t ent_hbb;
 
         struct queued_msg_t
         {
             entity_t    ent;
-            component_t cmp;
             msg_t       msg;
         };
 
@@ -34,14 +33,14 @@ namespace ncore
             // reset bit for entity
         }
 
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg) { msg_queue.checkout() = {entity, component, msg}; msg_queue.commit(); }
+        virtual void on_msg(entity_t entity, msg_t msg) { msg_queue.checkout() = {entity, msg}; msg_queue.commit(); }
 
         virtual void on_tick(float dt)
         {
             // go over all the queued messages and process them
             while (msg_queue.size() > 0)
             {
-                const queued_msg_t& queued_msg = msg_queue.back();
+                //const queued_msg_t& queued_msg = msg_queue.back();
 
                 // handle the message
                 // - move + collision (all entities)
@@ -63,7 +62,7 @@ namespace ncore
     class SystemAI : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
+        virtual void on_msg(entity_t entity, msg_t msg)
         {
             // handle the message
         }
@@ -79,7 +78,7 @@ namespace ncore
     class SystemGfxVfx : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
+        virtual void on_msg(entity_t entity, msg_t msg)
         {
             // handle the message
         }
@@ -95,7 +94,7 @@ namespace ncore
     class SystemAudioSfx : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
+        virtual void on_msg(entity_t entity, msg_t msg)
         {
             // handle the message
         }
@@ -111,7 +110,7 @@ namespace ncore
     class SystemRender : public ecs_system_t
     {
     public:
-        virtual void on_msg(entity_t entity, component_t component, msg_t msg)
+        virtual void on_msg(entity_t entity, msg_t msg)
         {
             // handle the message
         }
@@ -126,7 +125,8 @@ namespace ncore
 
     static void use_case()
     {
-        alloc_t* allocator = context_t::system_alloc();
+        context_t ctx = g_current_context();
+        alloc_t* allocator = ctx.system_alloc();
         id_system_t id_system;
 
         ecs_t ecs(&id_system, 1024, 256, 256, allocator);
@@ -134,8 +134,8 @@ namespace ncore
         const system_t    ships_system   = ecs.register_system(gSystemShips, "system/ships");
         const component_t ship_pos_cp    = ecs.register_component<vector3_t>(ships_system, "position");
         const component_t ship_dir_cp    = ecs.register_component<vector3_t>(ships_system, "direction");
-        const component_t ship_speed_cp  = ecs.register_component<f32>(ships_system, "speed");
-        const component_t ship_radius_cp = ecs.register_component<f32>(ships_system, "radius");
+        //const component_t ship_speed_cp  = ecs.register_component<f32>(ships_system, "speed");
+        //const component_t ship_radius_cp = ecs.register_component<f32>(ships_system, "radius");
 
         const entity_t bug1 = ecs.create_entity(ships_system, "entity/bug1");
         ecs.add_component<vector3_t>(bug1, ship_pos_cp, vector3_t::zero); // by id
@@ -148,6 +148,8 @@ namespace ncore
         const system_t sfx_system    = ecs.register_system(gSystemAudioSfx, "system/audio/sfx");
         const system_t render_system = ecs.register_system(gSystemRender, "system/gfx/render");
 
+        CC_UNUSED(render_system);
+
         msg_system_t& msg = *ecs.msg;
 
         const id_t explosion_msg_id = ecs.register_id("msg/explosion");
@@ -155,8 +157,13 @@ namespace ncore
         const property_t pos_prop    = msg.register_property<vector3_t>("position", vector3_t::zero);
         const property_t radius_prop = msg.register_property<float>("radius", 10.0f);
 
+        CC_UNUSED(pos_prop);
+        CC_UNUSED(radius_prop);
+
         // what about composing a message using named (registered) properties?
         vector3_t explosion_pos = {100.0f, 2.0f, 5.0f};
+
+        CC_UNUSED(explosion_pos);
 
         // position, radius, damage
         const msg_t explosion_msg = msg.begin(explosion_msg_id);
