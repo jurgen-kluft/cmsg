@@ -78,49 +78,49 @@ namespace ncore
         // message system
 
         struct system_t;
-        system_t* create_msg_system();
-        void      destroy_msg_system(system_t* sys);
+        system_t* create_system();
+        void      destroy_system(system_t* sys);
 
         // --------- message - string registration ---------
-        id_t        msg_idof_str(system_t* sys, const char* str);
-        const char* msg_strof_id(system_t* sys, id_t id);
+        id_t        idof_str(system_t* sys, const char* str);
+        const char* strof_id(system_t* sys, id_t id);
 
         // --------- message - property registration ---------
-        template <typename T> property_t msg_register_property(system_t* sys, const char* name, const T& default_value = type_t<T>::default_value);
-        template <typename T> property_t msg_register_property(system_t* sys, id_t id, const T& default_value = type_t<T>::default_value);
+        template <typename T> property_t register_property(system_t* sys, const char* name, const T& default_value = type_t<T>::default_value);
+        template <typename T> property_t register_property(system_t* sys, id_t id, const T& default_value = type_t<T>::default_value);
 
-        template <typename T> void msg_default_property(system_t* sys, property_t property, T const*& outValue);
-        id_t                       msg_idof_property(system_t* sys, property_t property);
-        s32                        msg_sizeof_property(system_t* sys, property_t property);
-        const char*                msg_nameof_property(system_t* sys, property_t property);
+        template <typename T> void default_property(system_t* sys, property_t property, T const*& outValue);
+        id_t                       idof_property(system_t* sys, property_t property);
+        s32                        sizeof_property(system_t* sys, property_t property);
+        const char*                nameof_property(system_t* sys, property_t property);
 
         // --------- message - writing ---------
-        msg_t msg_begin(system_t* sys, id_t id);
-        msg_t msg_begin(system_t* sys, const char* name);
+        msg_t write_begin(system_t* sys, id_t id);
+        msg_t write_begin(system_t* sys, const char* name);
 
         // You can write many properties as part of a message, they have to be registered though.
-        template <typename T> void msg_write(system_t* sys, msg_t msg, property_t pid, T const& value);
-        template <typename T> void msg_write(system_t* sys, msg_t msg, const char* pname, T const& value);
+        template <typename T> void write_property(system_t* sys, msg_t msg, property_t pid, T const& value);
+        template <typename T> void write_property(system_t* sys, msg_t msg, const char* pname, T const& value);
 
-        void msg_end(system_t* sys, msg_t msg);
+        void write_end(system_t* sys, msg_t msg);
 
         // --------- message - reading ---------
-        void msg_open(system_t* sys, msg_t msg);
+        void read_begin(system_t* sys, msg_t msg);
 
         // A message can have many properties, this function will return false when the requested property type
         // is not part of the message. You will get back a pointer to the type, you will have to do something
         // with that data before you call msg_close(msg).
-        template <typename T> bool msg_view(system_t* sys, msg_t msg, property_t pid, T const*& value);
-        template <typename T> bool msg_view(system_t* sys, msg_t msg, const char* pname, T const*& value);
+        template <typename T> bool read_property(system_t* sys, msg_t msg, property_t pid, T const*& value);
+        template <typename T> bool read_property(system_t* sys, msg_t msg, const char* pname, T const*& value);
 
-        void msg_close(system_t* sys, msg_t msg);
+        void read_end(system_t* sys, msg_t msg);
 
         // --------- message - receiver registration ---------
-        id_t msg_register_receiver(system_t* sys, const char* url, recipient_t* recv);
+        id_t register_receiver(system_t* sys, const char* url, recipient_t* recv);
 
         // --------- message - posting ---------
-        void msg_post(id_t url_id, msg_t msg);
-        void msg_post(const char* url, msg_t msg);
+        void post(id_t url_id, msg_t msg);
+        void post(const char* url, msg_t msg);
 
     } // namespace nmsg
 } // namespace ncore
